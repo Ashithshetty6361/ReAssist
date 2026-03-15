@@ -1,0 +1,4 @@
+# Keep logs directory
+*.log
+*.json
+!.gitkeep

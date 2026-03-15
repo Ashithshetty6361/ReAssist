@@ -1,0 +1,3 @@
+# Keep evaluation directory
+*.json
+!.gitkeep

@@ -1,0 +1,20 @@
+# Core dependencies
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# API integrations
+arxiv>=2.0.0
+requests>=2.31.0
+
+# PDF parsing
+pdfplumber>=0.10.0
+
+# Utilities
+tiktoken>=0.5.0
+
+# Web UI (optional)
+streamlit>=1.28.0
+
+# Testing (optional)
+pytest>=7.4.0
+jsonschema>=4.19.0
