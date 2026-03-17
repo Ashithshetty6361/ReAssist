@@ -6,6 +6,8 @@ Single Responsibility: Paper summarization with long context handling ONLY
 import os
 from openai import OpenAI
 from utils.helpers import chunk_text, clean_text
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 
 class SummarizerAgent:
@@ -27,49 +29,44 @@ class SummarizerAgent:
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
     def run(self, input_data):
-        """
-        Standard agent interface: run(dict) -> dict
-        
-        Args:
-            input_data: Dictionary containing:
-                - papers: List of paper dictionaries with abstracts
-        
-        Returns:
-            Dictionary containing:
-                - papers: List of papers with 'summary' field added
-                - success: Boolean
-                - error: Error message if failed
-        """
         papers = input_data.get('papers', [])
-        
         if not papers:
+            return {'papers': [], 'success': False, 'error': 'No papers provided'}
+
+        async def _run_all():
+            with ThreadPoolExecutor(max_workers=min(len(papers), 5)) as executor:
+                tasks = [self._summarize_single_paper(p, executor) for p in papers]
+                return await asyncio.gather(*tasks)
+
+        try:
+            summarized_papers = asyncio.run(_run_all())
             return {
-                'papers': [],
-                'success': False,
-                'error': 'No papers provided'
+                'papers': list(summarized_papers),
+                'success': True,
+                'error': None
             }
-        
-        summarized_papers = []
-        
-        for paper in papers:
-            try:
-                summary = self._summarize_single_paper(paper)
-                paper_copy = paper.copy()
-                paper_copy['summary'] = summary
-                summarized_papers.append(paper_copy)
-            except Exception as e:
-                # Add placeholder summary on failure
-                paper_copy = paper.copy()
-                paper_copy['summary'] = f"[Summary unavailable] {paper.get('abstract', '')[:200]}..."
-                summarized_papers.append(paper_copy)
-        
-        return {
-            'papers': summarized_papers,
-            'success': True,
-            'error': None
-        }
-    
-    def _summarize_single_paper(self, paper):
+        except Exception as e:
+            return {'papers': [], 'success': False, 'error': str(e)}
+
+    async def _summarize_single_paper(self, paper, executor):
+        loop = asyncio.get_event_loop()
+        try:
+            summary = await loop.run_in_executor(
+                executor,
+                self._summarize_single_paper_sync,
+                paper
+            )
+            paper_copy = paper.copy()
+            paper_copy['summary'] = summary
+            return paper_copy
+        except Exception as e:
+            paper_copy = paper.copy()
+            paper_copy['summary'] = (
+                f"[Summary unavailable] {paper.get('abstract', '')[:200]}..."
+            )
+            return paper_copy
+
+    def _summarize_single_paper_sync(self, paper):
         """Summarize a single paper using chunking if needed"""
         abstract = clean_text(paper.get('abstract', ''))
         

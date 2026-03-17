@@ -7,7 +7,11 @@ import os
 import sys
 from dotenv import load_dotenv
 from root_agent import create_root_agent
-from evaluation.evaluator import create_evaluator
+try:
+    from evaluation.evaluator import create_evaluator
+    EVALUATOR_AVAILABLE = True
+except ImportError:
+    EVALUATOR_AVAILABLE = False
 from utils.helpers import format_paper_metadata
 
 # Load environment variables
@@ -187,21 +191,23 @@ def main():
                 print_results(results)
                 
                 # Run evaluation if requested
-                if config['run_evaluation']:
-                    print("\n🔬 Running evaluation comparison...")
+                if config['run_evaluation'] and EVALUATOR_AVAILABLE:
+                    logger.info("\n🔬 Running evaluation comparison...") # Changed to logger.info
                     evaluator = create_evaluator(model=config['model'])
                     comparison = evaluator.run_baseline_comparison(
                         query,
                         results.get('papers', []),
                         results
                     )
+                elif config['run_evaluation'] and not EVALUATOR_AVAILABLE:
+                    logger.info("\n⚠️  Evaluator not yet implemented — skipping comparison") # Changed to logger.info
             
             # Show performance summary
             summary = root_agent.get_performance_summary()
-            print(f"\n⏱️  Performance Summary:")
-            print(f"   Total time: {summary['total_time']:.2f}s")
-            print(f"   Agents executed: {summary['agent_count']}")
-            print(f"   Papers found: {summary['papers_found']}")
+            logger.info(f"\n⏱️  Performance Summary:") # Changed to logger.info
+            logger.info(f"   Total time: {summary['total_time']:.2f}s") # Changed to logger.info
+            logger.info(f"   Agents executed: {len(summary.get('agent_timings', {}))}") # Changed to logger.info, and logic
+            logger.info(f"   Papers found: {len(results.get('papers', []))}") # Changed to logger.info, and logic
             
         except KeyboardInterrupt:
             print("\n\n⚠️  Pipeline interrupted by user")

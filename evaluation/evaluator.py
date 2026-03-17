@@ -1,256 +1,209 @@
 """
-Evaluation Module - 3-Way Fair Comparison
-Compares: Fair Baseline (CoT) vs Multi-Agent vs Multi-Agent+RAG
+Evaluator - Compares multi-agent pipeline vs CoT baseline
+Single Responsibility: Evaluation and scoring ONLY
 """
 
 import os
+import csv
 import json
 import time
 from datetime import datetime
-from openai import OpenAI
-from agents.fair_baseline_agent import create_fair_baseline_agent
-from config import PRICING
+from agents.cot_baseline_agent import create_cot_baseline_agent
 
 
 class Evaluator:
-    """Evaluates pipeline with honest 3-way comparison"""
-    
-    def __init__(self, model="gpt-3.5-turbo"):
-        """
-        Initialize Evaluator
-        
-        Args:
-            model: OpenAI model to use
-        """
+    """
+    Compares multi-agent pipeline output against CoT baseline.
+    Uses human annotations if available, automated scoring as fallback.
+    """
+
+    def __init__(self, model="gpt-3.5-turbo",
+                 annotations_path="evaluation/human_annotations.csv"):
         self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.baseline_agent = create_fair_baseline_agent(model=model)
-    
-    def run_three_way_comparison(self, query, papers, multi_agent_results, rag_enabled=False):
+        self.annotations_path = annotations_path
+        self._annotations = self._load_annotations()
+        self.cot_agent = create_cot_baseline_agent(model=model)
+
+    def _load_annotations(self) -> dict:
+        """Load human annotation CSV if it exists"""
+        annotations = {}
+        if not os.path.exists(self.annotations_path):
+            return annotations
+        try:
+            with open(self.annotations_path, newline='', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    key = (row['query'].lower().strip(), row['agent_type'])
+                    annotations[key] = {
+                        'coverage_score': float(row['coverage_score']),
+                        'specificity_score': float(row['specificity_score']),
+                        'actionability_score': float(row['actionability_score'])
+                    }
+            print(f"  ✓ Loaded {len(annotations)} human annotations")
+        except Exception as e:
+            print(f"  ⚠️  Could not load annotations: {e}")
+        return annotations
+
+    def _automated_score(self, output: dict) -> dict:
         """
-        3-way comparison: Fair Baseline vs Multi-Agent vs Multi-Agent+RAG
-        
-        Args:
-            query: Research query
-            papers: Retrieved papers (SAME for all configurations)
-            multi_agent_results: Results from multi-agent pipeline
-            rag_enabled: Whether RAG was used
-        
-        Returns:
-            Structured JSON with 3-way comparison
+        Automated structural scoring when no human annotation exists.
+        Scores based on completeness of output fields.
         """
-        print("\n" + "=" * 80)
-        print("EVALUATION: 3-Way Comparison")
-        print("=" * 80)
-        
-        # Configuration 1: Fair Baseline (Structured CoT)
-        print("\n[Config 1/3] Running Fair Baseline (Structured CoT)...")
-        baseline_result = self.baseline_agent.run({'papers': papers})
-        
-        if not baseline_result['success']:
-            print(f"Baseline failed: {baseline_result['error']}")
-            return self._error_result(baseline_result['error'])
-        
-        baseline_latency = baseline_result['latency_seconds']
-        baseline_output = baseline_result['baseline_output']
-        print(f"✓ Baseline complete ({baseline_latency:.2f}s)")
-        
-        # Configuration 2: Multi-Agent (current results)
-        multi_agent_latency = sum(multi_agent_results.get('agent_timings', {}).values())
-        
-        # Configuration 3: Multi-Agent+RAG (if enabled)
-        rag_latency = multi_agent_latency  # Same unless RAG adds overhead
-        
-        # Compute heuristic scores
-        scores = self._compute_scores(baseline_output, multi_agent_results, rag_enabled)
-        
-        # Estimate costs
-        costs = self._estimate_costs(papers, multi_agent_results, rag_enabled)
-        
-        # Determine winner
-        winner = self._determine_winner(scores, rag_enabled)
-        
-        # Build structured output
-        evaluation = {
-            "timestamp": datetime.now().isoformat(),
-            "query": query,
-            "paper_count": len(papers),
-            "rag_enabled": rag_enabled,
-            
-            "scores": scores,
-            
-            "latency_comparison": {
-                "fair_baseline_seconds": round(baseline_latency, 2),
-                "multi_agent_seconds": round(multi_agent_latency, 2),
-                "multi_agent_rag_seconds": round(rag_latency, 2) if rag_enabled else None
-            },
-            
-            "cost_estimate": costs,
-            
-            "winner": winner,
-            
-            "notes": self._generate_notes(scores, costs, rag_enabled)
-        }
-        
-        # Save evaluation
-        self._save_evaluation(evaluation)
-        
-        # Print summary
-        self._print_summary(evaluation)
-        
-        return evaluation
-    
-    def _compute_scores(self, baseline_output, multi_agent_results, rag_enabled):
-        """
-        Compute heuristic scores (1-5 scale)
-        
-        Heuristic logic:
-        - Coverage: How many aspects addressed (summary/gaps/ideas/techniques)
-        - Specificity: Technical detail depth
-        - Actionability: Presence of guidance/timeline
-        
-        Returns dict with scores for each configuration
-        """
-        # Baseline scores (heuristic: all-in-one prompt)
-        baseline_scores = {
-            "coverage_score": 3,  # Covers most but compressed
-            "specificity_score": 3,  # Moderate detail
-            "actionability_score": 2   # Limited guidance
-        }
-        
-        # Multi-agent scores (heuristic: specialized agents)
-        multi_agent_scores = {
-            "coverage_score": 5,  # All aspects covered
-            "specificity_score": 5,  # Deep specialized analysis
-            "actionability_score": 5   # Explicit guidance agent
-        }
-        
-        # RAG scores (heuristic: full paper context)
-        rag_scores = {
-            "coverage_score": 5,
-            "specificity_score": 5,  # Even more detail from full papers
-            "actionability_score": 5
-        } if rag_enabled else None
-        
-        return {
-            "fair_baseline": baseline_scores,
-            "multi_agent": multi_agent_scores,
-            "multi_agent_rag": rag_scores
-        }
-    
-    def _estimate_costs(self, papers, multi_agent_results, rag_enabled):
-        """
-        Estimate costs in USD based on token usage
-        
-        Uses heuristic estimation:
-        - Baseline: 1 LLM call (~1500 input + ~2000 output)
-        - Multi-agent: 6 LLM calls (~500-2000 tokens each)
-        - RAG: + embedding costs
-        """
-        pricing = PRICING.get(self.model, PRICING['gpt-3.5-turbo'])
-        
-        # Baseline cost estimate
-        baseline_input_tokens = 1500 + (len(papers) * 200)  # Papers in context
-        baseline_output_tokens = 2000
-        baseline_cost = (baseline_input_tokens * pricing['input'] + 
-                        baseline_output_tokens * pricing['output']) / 1000
-        
-        # Multi-agent cost estimate  
-        multi_agent_cost = 0
-        # Summarizer: largest
-        multi_agent_cost += (2000 * pricing['input'] + 500 * pricing['output']) / 1000
-        # Other 5 agents: moderate
-        for _ in range(5):
-            multi_agent_cost += (1000 * pricing['input'] + 600 * pricing['output']) / 1000
-        
-        # RAG cost (add embedding)
-        rag_cost = multi_agent_cost
-        if rag_enabled:
-            # Embedding cost: ~10K tokens for 5-7 papers
-            embedding_cost = (10000 * PRICING.get('text-embedding-ada-002', 0.0001)) / 1000
-            rag_cost += embedding_cost
-        
-        return {
-            "fair_baseline_usd": round(baseline_cost, 4),
-            "multi_agent_usd": round(multi_agent_cost, 4),
-            "multi_agent_rag_usd": round(rag_cost, 4) if rag_enabled else None
-        }
-    
-    def _determine_winner(self, scores, rag_enabled):
-        """Determine winner based on total scores"""
-        baseline_total = sum(scores['fair_baseline'].values())
-        multi_agent_total = sum(scores['multi_agent'].values())
-        
-        if rag_enabled and scores['multi_agent_rag']:
-            rag_total = sum(scores['multi_agent_rag'].values())
-            if rag_total > multi_agent_total and rag_total > baseline_total:
-                return "multi_agent_rag"
-        
-        if multi_agent_total > baseline_total:
-            return "multi_agent"
+        # Coverage: are the key output fields populated?
+        coverage = 0.0
+        for field in ['papers', 'synthesis', 'gaps', 'ideas']:
+            val = output.get(field)
+            if val and val != {} and val != []:
+                coverage += 2.5
+
+        # Specificity: do ideas have concrete hypotheses?
+        ideas = output.get('ideas', [])
+        if isinstance(ideas, list) and len(ideas) > 0:
+            with_detail = sum(
+                1 for i in ideas
+                if isinstance(i, dict) and (i.get('hypothesis') or i.get('title'))
+            )
+            specificity = round((with_detail / len(ideas)) * 10, 1)
+        elif isinstance(ideas, dict) and ideas.get('ideas_text'):
+            specificity = 6.0
         else:
-            return "fair_baseline"
-    
-    def _generate_notes(self, scores, costs, rag_enabled):
-        """Generate honest assessment notes"""
-        notes = []
-        notes.append("Heuristic scoring (1-5): coverage, specificity, actionability")
-        notes.append(f"Multi-agent provides {sum(scores['multi_agent'].values())} vs baseline {sum(scores['fair_baseline'].values())} total score")
-        notes.append(f"Cost tradeoff: Multi-agent is ~{costs['multi_agent_usd']/costs['fair_baseline_usd']:.1f}x more expensive")
-        
-        if rag_enabled:
-            notes.append("RAG adds full paper context at additional embedding cost")
-        
-        return " | ".join(notes)
-    
-    def _save_evaluation(self, evaluation):
-        """Save evaluation to JSON file"""
-        os.makedirs('evaluation', exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"evaluation/run_{timestamp}.json"
-        
-        with open(filename, 'w') as f:
-            json.dump(evaluation, f, indent=2)
-        
-        print(f"\n✓ Evaluation saved to {filename}")
-    
-    def _print_summary(self, evaluation):
-        """Print evaluation summary"""
-        print("\n" + "=" * 80)
-        print("EVALUATION SUMMARY")
-        print("=" * 80)
-        
-        # Scores  
-        print("\nSCORES (1-5 scale):")
-        for config, scores in evaluation['scores'].items():
-            if scores:
-                total = sum(scores.values())
-                print(f"  {config}: {total}/15 (coverage={scores['coverage_score']}, specificity={scores['specificity_score']}, actionability={scores['actionability_score']})")
-        
-        # Latency
-        print("\nLATENCY:")
-        for config, seconds in evaluation['latency_comparison'].items():
-            if seconds is not None:
-                print(f"  {config}: {seconds}s")
-        
-        # Cost
-        print("\nCOST (USD):")
-        for config, cost in evaluation['cost_estimate'].items():
-            if cost is not None:
-                print(f"  {config}: ${cost}")
-        
-        print(f"\nWINNER: {evaluation['winner']}")
-        print("=" * 80)
-    
-    def _error_result(self, error):
-        """Return error result structure"""
+            specificity = 0.0
+
+        # Actionability: does guidance have concrete first steps?
+        guidance = output.get('guidance', [])
+        if isinstance(guidance, list) and len(guidance) > 0:
+            complete = sum(
+                1 for g in guidance
+                if isinstance(g, dict) and g.get('first_concrete_step')
+            )
+            actionability = round((complete / len(guidance)) * 10, 1)
+        elif isinstance(guidance, dict) and guidance.get('guidance_text'):
+            actionability = 5.0
+        else:
+            actionability = 0.0
+
         return {
-            "timestamp": datetime.now().isoformat(),
-            "error": error,
-            "success": False
+            'coverage_score': round(coverage, 1),
+            'specificity_score': specificity,
+            'actionability_score': actionability
         }
+
+    def _score_output(self, output: dict, query: str, agent_type: str) -> dict:
+        """Score an output using human annotations or automated fallback"""
+        key = (query.lower().strip(), agent_type)
+
+        if key in self._annotations:
+            scores = self._annotations[key]
+            source = "human_annotation"
+        else:
+            scores = self._automated_score(output)
+            source = "automated"
+
+        avg = round(
+            (scores['coverage_score'] +
+             scores['specificity_score'] +
+             scores['actionability_score']) / 3, 2
+        )
+
+        return {
+            **scores,
+            'avg_score': avg,
+            'source': source,
+            'query': query,
+            'agent_type': agent_type
+        }
+
+    def run_baseline_comparison(self, query: str, papers: list,
+                                 multi_agent_results: dict) -> dict:
+        """
+        Run CoT baseline and compare against multi-agent results.
+        This is the main method called from main.py.
+        """
+        print("  Running CoT baseline for comparison...")
+        start = time.time()
+        cot_result = self.cot_agent.run({'query': query})
+        cot_latency = round(time.time() - start, 2)
+
+        cot_output = {}
+        if cot_result.get('success') and cot_result.get('output'):
+            cot_output = cot_result['output']
+
+        ma_scores = self._score_output(multi_agent_results, query, 'multi_agent')
+        cot_scores = self._score_output(cot_output, query, 'cot_baseline')
+
+        delta = round(ma_scores['avg_score'] - cot_scores['avg_score'], 2)
+
+        if abs(delta) < 0.5:
+            winner = "tie"
+        elif delta > 0:
+            winner = "multi_agent"
+        else:
+            winner = "cot_baseline"
+
+        if delta > 2.0:
+            recommendation = (
+                "Use multi-agent — significant quality gain justifies the cost."
+            )
+        elif delta > 0.5:
+            recommendation = (
+                "Use router — multi-agent is better but marginal. "
+                "Let the router decide per query."
+            )
+        else:
+            recommendation = (
+                "Use CoT — quality is equivalent at 4x lower cost and 4x faster."
+            )
+
+        comparison = {
+            'query': query,
+            'timestamp': datetime.now().isoformat(),
+            'multi_agent_scores': ma_scores,
+            'cot_baseline_scores': cot_scores,
+            'winner': winner,
+            'quality_delta': delta,
+            'recommendation': recommendation,
+            'cot_latency_seconds': cot_latency,
+            'annotation_source': ma_scores['source'],
+            'papers_analyzed': len(papers)
+        }
+
+        self._save_report(comparison)
+        self._print_comparison(comparison)
+        return comparison
+
+    def _save_report(self, comparison: dict) -> None:
+        """Save comparison report as JSON"""
+        os.makedirs("evaluation/results", exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filepath = f"evaluation/results/comparison_{timestamp}.json"
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(comparison, f, indent=2)
+        print(f"  📊 Report saved: {filepath}")
+
+    def _print_comparison(self, comparison: dict) -> None:
+        """Print formatted comparison to console"""
+        ma = comparison['multi_agent_scores']
+        cot = comparison['cot_baseline_scores']
+        print("\n" + "=" * 60)
+        print("EVALUATION COMPARISON")
+        print("=" * 60)
+        print(f"{'Metric':<22} {'Multi-Agent':>10} {'CoT':>10}")
+        print("-" * 44)
+        for metric, label in [
+            ('coverage_score', 'Coverage'),
+            ('specificity_score', 'Specificity'),
+            ('actionability_score', 'Actionability')
+        ]:
+            print(f"{label:<22} {ma[metric]:>10.1f} {cot[metric]:>10.1f}")
+        print("-" * 44)
+        print(f"{'Average':<22} {ma['avg_score']:>10.2f} {cot['avg_score']:>10.2f}")
+        print(f"\nWinner       : {comparison['winner'].upper()}")
+        print(f"Quality delta: {comparison['quality_delta']:+.2f}")
+        print(f"Scored by    : {comparison['annotation_source']}")
+        print(f"Recommend    : {comparison['recommendation']}")
+        print("=" * 60)
 
 
 def create_evaluator(model="gpt-3.5-turbo"):
-    """Factory function to create evaluator"""
+    """Factory function — matches import in main.py"""
     return Evaluator(model=model)

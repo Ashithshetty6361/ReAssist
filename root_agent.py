@@ -20,6 +20,11 @@ from utils.logger import get_logger, reset_logger
 load_dotenv()
 
 
+class PipelineError(Exception):
+    """Raised when a pipeline stage fails after all retries"""
+    pass
+
+
 class RootAgent:
     """
     Root Orchestrator Agent
@@ -56,6 +61,34 @@ class RootAgent:
         self.guidance_agent = create_guidance_agent(model=model)
         
         self.logger.logger.info("Root Agent initialized with 7 agents")
+
+    def _run_agent_with_retry(self, agent, agent_name, input_data, max_retries=2):
+        """
+        Run an agent with automatic retry on failure.
+        Retries up to max_retries times with 2 second wait between attempts.
+        Raises PipelineError if all attempts fail.
+        """
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                result = agent.run(input_data)
+                if attempt > 0:
+                    self.logger.logger.info(
+                        f"✓ {agent_name} succeeded on attempt {attempt + 1}"
+                    )
+                return result
+            except Exception as e:
+                last_error = e
+                self.logger.logger.warning(
+                    f"⚠️  {agent_name} attempt {attempt + 1} failed: {str(e)}"
+                )
+                if attempt < max_retries:
+                    self.logger.logger.info("   Retrying in 2 seconds...")
+                    time.sleep(2)
+        raise PipelineError(
+            f"Agent '{agent_name}' failed after {max_retries + 1} attempts. "
+            f"Last error: {str(last_error)}"
+        )
     
     def _slice_context(self, state, agent):
         """Strict context slicing: pass only required inputs to agent"""
@@ -111,12 +144,24 @@ class RootAgent:
             start_time = time.time()
             # Strict context slicing
             search_input = {'query': query}  # Query not in state yet
-            search_result = self.search_agent.run(search_input)
+            search_result = self._run_agent_with_retry(
+                self.search_agent, 'SearchAgent', search_input
+            )
             self.agent_timings['search'] = time.time() - start_time
             
             if not search_result['success'] or not search_result['papers']:
                 self.logger.log_error("No papers found. Pipeline terminated.")
                 results['error'] = search_result.get('error', 'No papers found')
+                return results
+
+            if len(search_result['papers']) < 3:
+                self.logger.log_error(
+                    f"Only {len(search_result['papers'])} papers found."
+                )
+                results['error'] = (
+                    f"Insufficient papers found ({len(search_result['papers'])}). "
+                    "Please try a broader query."
+                )
                 return results
             
             results['papers'] = search_result['papers']
