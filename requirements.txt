@@ -1,5 +1,5 @@
 # Core dependencies
-openai>=1.0.0
+openai==1.35.0
 python-dotenv>=1.0.0
 
 # API integrations
@@ -18,3 +18,9 @@ streamlit>=1.28.0
 # Testing (optional)
 pytest>=7.4.0
 jsonschema>=4.19.0
+
+# Deployment & RAG Extensions
+fastapi>=0.104.0
+uvicorn>=0.23.2
+pydantic>=2.4.2
+chromadb>=0.4.15

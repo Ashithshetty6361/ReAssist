@@ -1,0 +1,24 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, feature/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+      - name: Run router tests
+        run: pytest tests/test_router.py -v
+      - name: Run agent tests
+        run: pytest tests/test_agents.py -v
+        env:
+          OPENAI_API_KEY: fake-key-for-testing

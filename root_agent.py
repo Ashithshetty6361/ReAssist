@@ -6,6 +6,7 @@ NO business logic, NO summarization, NO analysis
 
 import os
 import time
+import openai
 from dotenv import load_dotenv
 from agents.search_agent import create_search_agent
 from agents.summarize_agent import create_summarizer_agent
@@ -83,8 +84,18 @@ class RootAgent:
                     f"⚠️  {agent_name} attempt {attempt + 1} failed: {str(e)}"
                 )
                 if attempt < max_retries:
-                    self.logger.logger.info("   Retrying in 2 seconds...")
-                    time.sleep(2)
+                    import openai
+                    if isinstance(last_error, openai.RateLimitError):
+                        wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s
+                        self.logger.logger.warning(
+                            f"   Rate limit hit. Waiting {wait_time}s before retry..."
+                        )
+                        time.sleep(wait_time)
+                    elif isinstance(last_error, openai.APIConnectionError):
+                        self.logger.logger.warning("   Connection error. Waiting 3s...")
+                        time.sleep(3)
+                    else:
+                        time.sleep(2)
         raise PipelineError(
             f"Agent '{agent_name}' failed after {max_retries + 1} attempts. "
             f"Last error: {str(last_error)}"
@@ -151,7 +162,7 @@ class RootAgent:
             
             if not search_result['success'] or not search_result['papers']:
                 self.logger.log_error("No papers found. Pipeline terminated.")
-                results['error'] = search_result.get('error', 'No papers found')
+                results['error'] = search_result.get('error') or 'No papers found'
                 return results
 
             if len(search_result['papers']) < 3:
@@ -271,6 +282,32 @@ class RootAgent:
             self.logger.log_error(f"Pipeline failed: {str(e)}")
             results['error'] = str(e)
         
+        # Build observability report
+        results['observability'] = {
+            'run_id': __import__('uuid').uuid4().hex[:8],
+            'timestamp': __import__('datetime').datetime.now().isoformat(),
+            'query': query,
+            'total_time_seconds': round(sum(self.agent_timings.values()), 2),
+            'agent_timings': {
+                k: round(v, 2) for k, v in self.agent_timings.items()
+            },
+            'slowest_agent': max(self.agent_timings, key=self.agent_timings.get)
+                if self.agent_timings else None,
+            'papers_found': len(results.get('papers', [])),
+            'ideas_generated': len(results.get('ideas', [])) 
+                if isinstance(results.get('ideas'), list) else 0,
+            'pipeline_success': results.get('error') is None
+        }
+
+        # Save observability report
+        import json, os
+        os.makedirs("logs/runs", exist_ok=True)
+        run_id = results['observability']['run_id']
+        report_path = f"logs/runs/run_{run_id}.json"
+        with open(report_path, 'w') as f:
+            json.dump(results['observability'], f, indent=2)
+        self.logger.logger.info(f"📊 Observability report: {report_path}")
+
         return results
     
     def _execute_pdf_mode(self, pdf_path):

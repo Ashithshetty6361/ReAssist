@@ -40,3 +40,29 @@ PRICING = {
 LOG_DIR = "logs"
 EVALUATION_DIR = "evaluation"
 DATA_DIR = "data"
+
+
+def validate_environment():
+    """
+    Validate all required environment variables at startup.
+    Call this once in main.py and streamlit_app.py before anything else.
+    Raises EnvironmentError with a clear human-readable message if anything is missing.
+    """
+    import os
+    errors = []
+
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key or openai_key == "your_openai_api_key_here":
+        errors.append(
+            "OPENAI_API_KEY is missing or still set to placeholder value.\n"
+            "  Fix: Add OPENAI_API_KEY=sk-... to your .env file"
+        )
+
+    if errors:
+        raise EnvironmentError(
+            "\n\nReAssist startup failed — missing configuration:\n\n" +
+            "\n".join(f"  ❌ {e}" for e in errors) +
+            "\n\nCopy .env.example to .env and fill in your keys.\n"
+        )
+
+    return True

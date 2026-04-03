@@ -45,7 +45,7 @@ def print_results(results):
         print(f"   Source: {paper.get('source', 'Unknown')}")
     
     # Synthesis
-    synthesis = results.get('synthesis', {})
+    synthesis = results.get('synthesis') or {}
     if synthesis.get('synthesis_text'):
         print("\n" + "=" * 80)
         print("📊 KNOWLEDGE SYNTHESIS")
@@ -53,7 +53,7 @@ def print_results(results):
         print(synthesis['synthesis_text'])
     
     # Research Gaps
-    gaps = results.get('gaps', {})
+    gaps = results.get('gaps') or {}
     if gaps.get('gaps_text'):
         print("\n" + "=" * 80)
         print("🔍 RESEARCH GAPS IDENTIFIED")
@@ -61,7 +61,7 @@ def print_results(results):
         print(gaps['gaps_text'])
     
     # Research Ideas
-    ideas = results.get('ideas', {})
+    ideas = results.get('ideas') or {}
     if ideas.get('ideas_text'):
         print("\n" + "=" * 80)
         print("💡 NOVEL RESEARCH IDEAS")
@@ -69,7 +69,7 @@ def print_results(results):
         print(ideas['ideas_text'])
     
     # Technique Suggestions
-    techniques = results.get('techniques', {})
+    techniques = results.get('techniques') or {}
     if techniques.get('techniques_text'):
         print("\n" + "=" * 80)
         print("🛠️  ALTERNATIVE TECHNIQUES & GUIDANCE")
@@ -226,4 +226,10 @@ def main():
 
 
 if __name__ == "__main__":
+    from config import validate_environment
+    try:
+        validate_environment()
+    except EnvironmentError as e:
+        print(e)
+        sys.exit(1)
     main()
