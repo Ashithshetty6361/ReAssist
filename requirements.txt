@@ -24,3 +24,19 @@ fastapi>=0.104.0
 uvicorn>=0.23.2
 pydantic>=2.4.2
 chromadb>=0.4.15
+
+# Database (Production Layer)
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+
+# Auth
+passlib[bcrypt]>=1.7.4
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+
+# Production Database (optional — for Postgres deployment)
+# psycopg2-binary>=2.9.9
+
+# Adaptive-Rag Extensions
+tavily-python>=0.3.0
+PyYAML>=6.0.0
