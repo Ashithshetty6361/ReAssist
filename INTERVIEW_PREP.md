@@ -1,5 +1,6 @@
-                                # ReAssist Interview Preparation Guide
+# ReAssist Interview Preparation Guide
 
+*A technical preparation sheet for discussing the ReAssist intelligence engine, covering architecture, operations, trade-offs, and scalability.*
 ## Q1: Walk me through what ReAssist does.
 ReAssist is a research intelligence engine designed to automate the initial discovery and ideation workflow for researchers. The core of the system is a highly orchestrated 7-agent pipeline where specialized agents sequentially search academic papers, summarize them, synthesize literature, identify gaps, and propose novel methodologies. I also built a strict CoT (Chain-of-Thought) baseline agent to empirically compare against the multi-agent pipeline. Overarching this is the AgenticOps routing layer which algorithmically models incoming queries to dictate whether they deserve the expensive 7-agent treatment or the cheaper CoT single-prompt based on computational necessity.
 

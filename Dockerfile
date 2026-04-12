@@ -20,8 +20,6 @@ RUN mkdir -p logs/runs logs/checkpoints evaluation/results data/chromadb
 # Expose FastAPI port
 EXPOSE 8000
 
-# Expose Streamlit port
-EXPOSE 8501
 
 # Default command runs FastAPI
 CMD ["python", "-m", "uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

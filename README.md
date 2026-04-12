@@ -31,6 +31,16 @@ ReAssist is an intelligent research engine that fetches academic papers and runs
 **"When is a multi-agent system actually worth its cost?"**
 Multi-agent systems yield significant quality gains only for complex, novel, or deeply comparative research queries; for standard informational lookups, a single well-prompted model is 4x cheaper and 4x faster. The AgenticOps router provides immense value by programmatically detecting when the expensive 7-agent pipeline is justified versus when a simple CoT baseline suffices.
 
+## Tech Stack
+
+### ⚡ Backend (FastAPI)
+The backend is a highly asynchronous python engine driven by **FastAPI**.
+- **Features:** High concurrency for multi-agent I/O, background tasks for long-running research pipelines, SSE (Server-Sent Events) for real-time observability streaming, and SQLite/WAL (Upgradable to PostgreSQL) for local database persistence.
+
+### 🌐 Frontend (Next.js)
+The frontend is a modern web application leveraging **Next.js 15**.
+- **Features:** React Server Components (RSC) for rapid loading, TailwindCSS for responsive and beautiful glassmorphic UI, and a custom Claude-like conversational interface for tracking research agent progress in real time.
+
 ## Architecture
 
 ### The 7-Agent Pipeline
@@ -78,20 +88,26 @@ The router continually logs its score breakdowns, routing decisions, and resulti
 ## How To Run
 
 ### Prerequisites
-`pip install -r requirements.txt`
+`npm install` inside the `frontend/` directory (requires Node 18+).
+`pip install -r requirements.txt` (requires Python 3.10+).
 Copy `.env.example` to `.env` and add your `OPENAI_API_KEY`.
 
-### Run the pipeline
-`python main.py`
+### Run the Desktop App (Recommended)
+You can launch both the frontend and backend servers together seamlessly:
+```cmd
+.\start_project.bat
+```
 
-### Run the Streamlit UI
-`streamlit run streamlit_app.py`
+### Run the Backend/Frontend Manually
+**Backend:** `uvicorn api:app --reload --port 8000`
+**Frontend:** `cd frontend && npm run dev`
 
-### Test router standalone
-`python router.py`
+### 🐳 Run using Docker (Production)
+We provide a `Dockerfile` and `docker-compose.yml` to ensure the entire application can run identically on any machine without worrying about local Python or Node dependencies. It will automatically spin up the Next.js Frontend, FastAPI Backend, and a production PostgreSQL database.
+**Command:** `docker-compose up -d --build`
 
 ### Run E2E tests
-`python test_integration.py`
+`python tests/test_integration.py`
 
 ## ⚖️ 6. Human-Annotated Evaluator
 
@@ -110,17 +126,17 @@ evaluation — it's the model grading its own homework.
 ## Project Structure
 - `agents/`: Contains the 7 specialized AI agents and the CoT baseline.
 - `utils/`: Helper utilities including context helpers, logging, and the TokenCounter observability module.
+- `frontend/`: The Next.js 15+ frontend web application.
 - `evaluation/`: The `evaluator.py` baseline comparator and the `results/` output directory.
 - `logs/`: Destination for `routing_log.jsonl` and performance traces.
+- `tests/`: Automated unit and manual verification scripts.
+- `api.py`: FastAPI server handling frontend requests to the pipeline.
+- `main.py`: Interactive CLI entry point for terminal use.
 - `root_agent.py`: Orchestrates the 7 agents, implements retry mechanisms, and slices context.
 - `router.py`: Determines pathing (CoT vs Multi-Agent) via complexity/precision scoring.
-- `main.py`: The core CLI and execution entry point.
-- `streamlit_app.py`: Web UI for running the pipeline interactively.
 - `config.py`: Environment configurations and constants.
-- `test_integration.py`: Automated E2E verification script.
+- `start_project.bat`: One-click startup script for servers.
 - `requirements.txt`: Python package dependencies.
-- `.env.example`: Template for environment variables.
-- `.gitignore`: Git exclusion rules.
 - `README.md`: Main project documentation.
 
 ## Roadmap
