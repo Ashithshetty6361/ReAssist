@@ -1,5 +1,38 @@
-.env 
-__pycache__/ 
-*.pyc 
-logs/ 
-.env.example 
+# ═══════════════════════════════════════════════════════════════════════════════
+# ReAssist .gitignore
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Environment & Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Database
+*.db
+*.sqlite3
+
+# Data directories
+data/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (frontend)
+frontend/node_modules/
+frontend/.next/

@@ -5,7 +5,7 @@ Tests: Query mode, context slicing, 3-way evaluation
 
 import os
 from dotenv import load_dotenv
-from root_agent import create_root_agent
+from src.pipeline.orchestrator import create_root_agent
 from evaluation.evaluator import create_evaluator
 
 load_dotenv()

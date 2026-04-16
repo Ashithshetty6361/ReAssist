@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pytest
-from router import AgentRouter
+from src.router.agent_router import AgentRouter
 
 class TestAgentRouter:
     def test_simple_query_routes_to_cot(self):

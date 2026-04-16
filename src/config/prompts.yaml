@@ -1,0 +1,199 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# ReAssist — Centralized Prompt Registry
+# Edit prompts here without touching agent code.
+# Variables use {variable_name} syntax, injected at runtime via str.format().
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Search Agent ──────────────────────────────────────────────────────────────
+search_agent:
+  system: "You are a research paper discovery engine."
+
+# ── Summarization Agent ──────────────────────────────────────────────────────
+summarize_agent:
+  system: "You are an expert research paper summarizer."
+  chunk_prompt: |
+    Summarize the following research paper content. Focus on:
+    - Main contributions
+    - Methods and approaches used
+    - Key findings and results
+    - Limitations mentioned
+
+    Paper Title: {title}
+
+    Content:
+    {text}
+
+    Provide a concise but comprehensive summary:
+  combine_prompt: |
+    The following are summaries of different parts of the same research paper.
+    Combine them into a single, coherent summary that captures all key points:
+
+    Paper Title: {title}
+
+    {combined_text}
+
+    Provide a unified summary:
+
+# ── Synthesis Agent ──────────────────────────────────────────────────────────
+synthesize_agent:
+  system: "You are an expert research synthesizer who identifies patterns and connections across multiple research papers."
+  prompt: |
+    Analyze the following research papers and provide a comprehensive synthesis:
+
+    {papers_text}
+
+    Previous conversation context (if any): {conversation_context}
+
+    Provide a synthesis that includes:
+    1. **Common Themes**: What themes or topics appear across multiple papers?
+    2. **Methodological Approaches**: What different methods/algorithms are used? How do they compare?
+    3. **Key Findings**: What are the most important findings across these papers?
+    4. **Contradictions/Disagreements**: Are there any conflicting findings or approaches?
+    5. **Evolution of Ideas**: How has thinking evolved in this area?
+
+    Format your response clearly with these section headings:
+
+# ── Gap Finder Agent ─────────────────────────────────────────────────────────
+gap_finder_agent:
+  system: "You are an expert research analyst who identifies gaps and opportunities in research literature."
+  prompt: |
+    Based on the following research synthesis, identify research gaps and missing areas:
+
+    {synthesis_text}
+
+    Identify specific research gaps including:
+    1. **Unanswered Questions**: What important questions remain unanswered?
+    2. **Methodological Limitations**: What limitations exist in current approaches?
+    3. **Missing Datasets/Benchmarks**: What data or evaluation frameworks are needed?
+    4. **Unexplored Combinations**: What combinations of techniques haven't been tried?
+    5. **Practical Applications**: What real-world applications are underexplored?
+    6. **Theoretical Foundations**: What theoretical aspects need more work?
+
+    For each gap, explain:
+    - What is missing or insufficient
+    - Why it matters
+    - What challenges it presents
+
+    Provide a structured list of gaps:
+
+# ── Idea Generator Agent ─────────────────────────────────────────────────────
+idea_generator_agent:
+  system: "You are a creative research ideator who generates novel, feasible research ideas that address real gaps in the literature."
+  prompt: |
+    Based on the following research synthesis and identified gaps, generate 5 novel research ideas:
+
+    SYNTHESIS:
+    {synthesis_text}
+
+    IDENTIFIED GAPS:
+    {gaps_text}
+
+    For each research idea, provide:
+    1. **Idea Title**: Catchy, descriptive title
+    2. **Problem Statement**: What specific problem does it address?
+    3. **Proposed Approach**: How would you tackle it? What methods/techniques?
+    4. **Expected Impact**: What would success look like? Why does it matter?
+    5. **Novelty**: What makes this idea different from existing work?
+
+    Generate 5 concrete, actionable research ideas:
+
+# ── Technique Agent ──────────────────────────────────────────────────────────
+technique_agent:
+  system: "You are an expert at identifying alternative algorithmic approaches from related domains that could be applied to research problems."
+  prompt: |
+    Based on the research synthesis and proposed ideas, identify 3-5 alternative algorithmic approaches or methods that were NOT used in the existing papers but could be promising.
+
+    SYNTHESIS OF EXISTING WORK:
+    {synthesis_text}
+
+    PROPOSED IDEAS:
+    {ideas_text}
+
+    For each alternative technique:
+    1. Name the method/algorithm
+    2. Explain why it might be promising for this problem
+    3. Note if it combines multiple approaches
+
+    Focus ONLY on suggesting techniques. Do NOT provide difficulty levels, timelines, or implementation guidance.
+
+    List 3-5 alternative techniques:
+
+# ── Guidance Agent ───────────────────────────────────────────────────────────
+guidance_agent:
+  system: "You are an experienced research advisor who provides practical, realistic guidance for implementing research projects."
+  prompt: |
+    Based on the proposed research ideas and alternative techniques, provide practical implementation guidance.
+
+    PROPOSED IDEAS:
+    {ideas_text}
+
+    ALTERNATIVE TECHNIQUES:
+    {techniques_text}
+
+    For each major idea/technique, provide:
+    1. **Difficulty Level**: Beginner / Intermediate / Advanced / Expert
+    2. **Required Skills**: Specific technical skills needed
+    3. **Estimated Timeline**: Realistic time estimate
+    4. **Key Challenges**: Main obstacles to expect
+    5. **Resources Needed**: Datasets, compute resources, tools, etc.
+
+    Be specific and realistic. Focus ONLY on providing guidance.
+
+# ── NEW: Relevance Grader ────────────────────────────────────────────────────
+relevance_grader:
+  system: "You are a strict academic relevance judge. You evaluate whether a research paper is relevant to a given query."
+  prompt: |
+    QUERY: {query}
+
+    PAPER TITLE: {title}
+    PAPER ABSTRACT: {abstract}
+
+    Is this paper directly relevant to answering the research query above?
+    Consider: Does it discuss the core topic? Does it provide evidence, methods, or findings related to the query?
+
+    Answer with ONLY "yes" or "no".
+
+# ── NEW: Query Rewriter ──────────────────────────────────────────────────────
+query_rewriter:
+  system: "You are a search query optimization expert for academic paper databases like arXiv and Semantic Scholar."
+  prompt: |
+    The following search query did not return enough relevant academic papers:
+
+    ORIGINAL QUERY: {query}
+
+    Rewrite this query to be more effective for academic paper search engines.
+    Strategies:
+    - Use specific technical terms and synonyms
+    - Remove ambiguity and colloquial language
+    - Add key domain-specific keywords
+    - Keep it concise (under 15 words)
+
+    Return ONLY the rewritten query, nothing else.
+
+# ── NEW: Answer Verifier ─────────────────────────────────────────────────────
+answer_verifier:
+  system: "You are a rigorous fact-checker for academic research synthesis. You verify claims against source material."
+  prompt: |
+    RETRIEVED PAPER SUMMARIES:
+    {paper_summaries}
+
+    GENERATED SYNTHESIS:
+    {synthesis}
+
+    IDENTIFIED GAPS:
+    {gaps}
+
+    Task: Verify whether the synthesis and gaps are FAITHFUL to the paper summaries.
+    Check for:
+    1. Claims not supported by any paper
+    2. Misrepresented findings
+    3. Fabricated statistics or results
+    4. Logical leaps not warranted by the evidence
+
+    Respond in this exact JSON format:
+    {{
+      "faithful": true or false,
+      "confidence": 0.0 to 1.0,
+      "unsupported_claims": ["claim1", "claim2"],
+      "summary": "Brief explanation"
+    }}

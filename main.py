@@ -6,13 +6,13 @@ Multi-Agent Literature Analyzer
 import os
 import sys
 from dotenv import load_dotenv
-from root_agent import create_root_agent
+from src.pipeline.orchestrator import create_root_agent
 try:
     from evaluation.evaluator import create_evaluator
     EVALUATOR_AVAILABLE = True
 except ImportError:
     EVALUATOR_AVAILABLE = False
-from utils.helpers import format_paper_metadata
+from src.utils.helpers import format_paper_metadata
 
 # Load environment variables
 load_dotenv()
@@ -29,21 +29,21 @@ def print_banner():
 def print_results(results):
     """
     Pretty-print pipeline results
-    
+
     Args:
         results: Results dictionary from pipeline
     """
     print("\n" + "=" * 80)
     print("RESEARCH ANALYSIS RESULTS")
     print("=" * 80)
-    
+
     # Papers found
     print(f"\n📚 Papers Analyzed: {len(results.get('papers', []))}")
     print("-" * 80)
     for idx, paper in enumerate(results.get('papers', [])):
         print(f"\n{idx+1}. {format_paper_metadata(paper)}")
         print(f"   Source: {paper.get('source', 'Unknown')}")
-    
+
     # Synthesis
     synthesis = results.get('synthesis') or {}
     if synthesis.get('synthesis_text'):
@@ -51,7 +51,7 @@ def print_results(results):
         print("📊 KNOWLEDGE SYNTHESIS")
         print("=" * 80)
         print(synthesis['synthesis_text'])
-    
+
     # Research Gaps
     gaps = results.get('gaps') or {}
     if gaps.get('gaps_text'):
@@ -59,7 +59,7 @@ def print_results(results):
         print("🔍 RESEARCH GAPS IDENTIFIED")
         print("=" * 80)
         print(gaps['gaps_text'])
-    
+
     # Research Ideas
     ideas = results.get('ideas') or {}
     if ideas.get('ideas_text'):
@@ -67,7 +67,7 @@ def print_results(results):
         print("💡 NOVEL RESEARCH IDEAS")
         print("=" * 80)
         print(ideas['ideas_text'])
-    
+
     # Technique Suggestions
     techniques = results.get('techniques') or {}
     if techniques.get('techniques_text'):
@@ -75,7 +75,7 @@ def print_results(results):
         print("🛠️  ALTERNATIVE TECHNIQUES & GUIDANCE")
         print("=" * 80)
         print(techniques['techniques_text'])
-    
+
     print("\n" + "=" * 80)
 
 
@@ -98,36 +98,36 @@ def get_user_query():
     print("   (e.g., 'attention mechanisms in transformers')")
     print("   (or type 'exit' to quit)\n")
     query = input("Query: ").strip()
-    
+
     if query.lower() == 'exit':
         return None
-    
+
     if not query:
         print("❌ Query cannot be empty!")
         return get_user_query()
-    
+
     return query
 
 
 def get_configuration():
     """Get configuration from user"""
     print("\n⚙️  Configuration:")
-    
+
     # Model selection
     print("\nSelect model:")
     print("1. gpt-3.5-turbo (faster, cheaper)")
     print("2. gpt-4 (better quality, slower, more expensive)")
     print("3. gpt-4-turbo-preview (best quality)")
-    
+
     model_choice = input("\nChoice (1-3, default 1): ").strip() or "1"
-    
+
     model_map = {
         "1": "gpt-3.5-turbo",
         "2": "gpt-4",
         "3": "gpt-4-turbo-preview"
     }
     model = model_map.get(model_choice, "gpt-3.5-turbo")
-    
+
     # Max papers
     max_papers_input = input("\nNumber of papers to analyze (default 5): ").strip() or "5"
     try:
@@ -135,11 +135,11 @@ def get_configuration():
         max_papers = max(1, min(max_papers, 10))  # Clamp between 1-10
     except ValueError:
         max_papers = 5
-    
+
     # Run evaluation
     run_eval = input("\nRun evaluation comparison? (y/n, default y): ").strip().lower() or "y"
     run_evaluation = run_eval == 'y'
-    
+
     return {
         'model': model,
         'max_papers': max_papers,
@@ -150,49 +150,49 @@ def get_configuration():
 def main():
     """Main application entry point"""
     print_banner()
-    
+
     # Validate API key
     if not validate_api_key():
         sys.exit(1)
-    
+
     # Get configuration
     config = get_configuration()
-    
+
     print(f"\n✅ Configuration:")
     print(f"   Model: {config['model']}")
     print(f"   Max Papers: {config['max_papers']}")
     print(f"   Evaluation: {'Yes' if config['run_evaluation'] else 'No'}")
-    
+
     # Main loop
     while True:
         # Get user query
         query = get_user_query()
-        
+
         if query is None:
             print("\n👋 Goodbye!")
             break
-        
+
         print(f"\n🚀 Starting multi-agent research pipeline...")
         print(f"   Topic: {query}")
-        
+
         # Create and run root agent
         try:
             root_agent = create_root_agent(
                 model=config['model'],
                 max_papers=config['max_papers']
             )
-            
+
             results = root_agent.execute_pipeline(query)
-            
+
             # Print results
             if results.get('error'):
                 print(f"\n❌ Pipeline failed: {results['error']}")
             else:
                 print_results(results)
-                
+
                 # Run evaluation if requested
                 if config['run_evaluation'] and EVALUATOR_AVAILABLE:
-                    logger.info("\n🔬 Running evaluation comparison...") # Changed to logger.info
+                    print("\n🔬 Running evaluation comparison...")
                     evaluator = create_evaluator(model=config['model'])
                     comparison = evaluator.run_baseline_comparison(
                         query,
@@ -200,15 +200,15 @@ def main():
                         results
                     )
                 elif config['run_evaluation'] and not EVALUATOR_AVAILABLE:
-                    logger.info("\n⚠️  Evaluator not yet implemented — skipping comparison") # Changed to logger.info
-            
+                    print("\n⚠️  Evaluator not yet implemented — skipping comparison")
+
             # Show performance summary
             summary = root_agent.get_performance_summary()
-            logger.info(f"\n⏱️  Performance Summary:") # Changed to logger.info
-            logger.info(f"   Total time: {summary['total_time']:.2f}s") # Changed to logger.info
-            logger.info(f"   Agents executed: {len(summary.get('agent_timings', {}))}") # Changed to logger.info, and logic
-            logger.info(f"   Papers found: {len(results.get('papers', []))}") # Changed to logger.info, and logic
-            
+            print(f"\n⏱️  Performance Summary:")
+            print(f"   Total time: {summary['total_time']:.2f}s")
+            print(f"   Agents executed: {len(summary.get('agent_timings', {}))}")
+            print(f"   Papers found: {len(results.get('papers', []))}")
+
         except KeyboardInterrupt:
             print("\n\n⚠️  Pipeline interrupted by user")
             break
@@ -216,7 +216,7 @@ def main():
             print(f"\n❌ Error: {str(e)}")
             import traceback
             traceback.print_exc()
-        
+
         # Continue or exit
         print("\n" + "=" * 80)
         continue_choice = input("\nAnalyze another topic? (y/n): ").strip().lower()
@@ -226,7 +226,7 @@ def main():
 
 
 if __name__ == "__main__":
-    from config import validate_environment
+    from src.core.config import validate_environment
     try:
         validate_environment()
     except EnvironmentError as e:

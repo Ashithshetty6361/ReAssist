@@ -5,7 +5,7 @@ Run this to verify context slicing and baseline fairness
 
 import os
 from dotenv import load_dotenv
-from root_agent import create_root_agent
+from src.pipeline.orchestrator import create_root_agent
 from evaluation.evaluator import create_evaluator
 
 load_dotenv()
