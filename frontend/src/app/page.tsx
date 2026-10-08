@@ -112,10 +112,14 @@ export default function Home() {
           query: topic || 'RAG Document Analysis', 
           max_papers: 3, 
           use_router: true, 
-          execution_type: 'multi_agent',
+          execution_type: 'MULTI_AGENT',
           document_id: documentId
         })
       });
+      if (!execRes.ok) {
+        const errorText = await execRes.text();
+        throw new Error(`Execute pipeline failed (${execRes.status}): ${errorText}`);
+      }
       const exec = await execRes.json();
       
       updateSession({ 

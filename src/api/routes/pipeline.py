@@ -47,7 +47,7 @@ def execute_pipeline(
     execution = PipelineExecution(
         workspace_id=ws.id,
         query=req.query,
-        execution_type=ExecutionType(req.execution_type),
+        execution_type=ExecutionType(req.execution_type) if req.execution_type else ExecutionType.MULTI_AGENT,
         status="running"
     )
     db.add(execution)

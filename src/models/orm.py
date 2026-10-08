@@ -34,6 +34,21 @@ class ExecutionType(str, enum.Enum):
     MULTI_AGENT = "MULTI_AGENT"
     RAG_PIPELINE = "RAG_PIPELINE"
 
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            val_norm = value.strip().upper().replace("-", "_")
+            if val_norm in ("MULTI_AGENT", "MULTIAGENT"):
+                return cls.MULTI_AGENT
+            if val_norm in ("COT", "COT_BASELINE"):
+                return cls.COT_BASELINE
+            if val_norm in ("RAG", "RAG_PIPELINE"):
+                return cls.RAG_PIPELINE
+            for member in cls:
+                if member.value.upper() == val_norm or member.name == val_norm:
+                    return member
+        return cls.MULTI_AGENT
+
 
 class AgentType(str, enum.Enum):
     SEARCH = "SEARCH"
