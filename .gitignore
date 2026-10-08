@@ -40,3 +40,8 @@ Thumbs.db
 # Node (frontend)
 frontend/node_modules/
 frontend/.next/
+
+# Private Interview & Defense Prep (Do not commit to GitHub)
+INTERVIEW_GUIDE.md
+*interview*
+*defense_prep*

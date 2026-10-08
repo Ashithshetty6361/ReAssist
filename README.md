@@ -302,23 +302,6 @@ ReAssist_Project/
 └── README.md                    # Comprehensive Project Documentation
 ```
 
----
-
-## ⚖️ Evaluation & Defense Guide (How to Present This)
-
-When presenting ReAssist to professors, recruiters, or technical reviewers, focus on these 4 pillars:
-
-1. **"Why not just use ChatGPT?"**
-   - Single-call LLMs suffer from severe attention collapse over long contexts and hallucinate without source verification. ReAssist breaks the research synthesis down into 11 verifiable steps with a dedicated **AnswerVerifier** hallucination guard.
-2. **"Isn't running 11 agents too expensive?"**
-   - Not in ReAssist. The **AgenticOps router** dynamically intercepts simple queries and routes them to a cheap CoT baseline, while complex queries are sliced into minimal payloads via `required_inputs`.
-3. **"How does the RAG work?"**
-   - Any research PDF is sliced into semantically overlapping chunks, indexed in workspace-scoped **ChromaDB** collections, and searched using cosine similarity with **Ollama `nomic-embed-text`**.
-4. **"Is it production ready?"**
-   - It features JWT authentication, modular storage (Local disk + AWS S3), multi-provider LLM support (Ollama + AWS Bedrock + OpenAI), full Next.js UI, structured BibTeX/Markdown exports, and passing CI/CD pipelines.
-
----
-
 ## 📜 License
 Distributed under the **MIT License**. See `LICENSE` for more information.
 
