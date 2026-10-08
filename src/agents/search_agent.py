@@ -95,13 +95,14 @@ class SearchAgent:
         """Search arXiv for papers"""
         papers = []
         
+        client = arxiv.Client()
         search = arxiv.Search(
             query=query,
             max_results=self.max_papers,
             sort_by=arxiv.SortCriterion.Relevance
         )
         
-        for result in search.results():
+        for result in client.results(search):
             paper = {
                 'title': result.title,
                 'authors': [author.name for author in result.authors],
