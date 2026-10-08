@@ -139,6 +139,7 @@ class RootAgent:
         # Build result dict (same shape the API expects)
         results = {
             "query": query,
+            "model": self.model,
             "papers": final_state.get("papers", []),
             "synthesis": final_state.get("synthesis"),
             "gaps": final_state.get("gaps"),

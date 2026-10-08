@@ -86,10 +86,11 @@ export default function IdeationTab({ onSelectTopic }: { onSelectTopic: (topic: 
       {topics.length > 0 && (
          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
            <h3 style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: '1rem', fontFamily: 'JetBrains Mono, monospace' }}>&gt; Generated Research Vectors</h3>
-           {topics.map((topic, i) => {
-              const parts = topic.split(' - ');
-              const title = parts[0] || topic;
-              const desc = parts[1] || '';
+           {topics.map((rawTopic, i) => {
+              const cleanTopic = rawTopic.replace(/^\[\s*["']?/, '').replace(/["']?\s*\]$/, '').replace(/^["']/, '').replace(/["'],?$/, '').trim();
+              const parts = cleanTopic.split(' - ');
+              const title = parts[0]?.trim() || cleanTopic;
+              const desc = parts[1]?.trim() || '';
               return (
                 <div 
                   key={i} 

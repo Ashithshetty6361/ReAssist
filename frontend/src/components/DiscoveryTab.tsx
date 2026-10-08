@@ -39,16 +39,19 @@ function SearchAgentOutput({ papers = [] }: { papers: any[] }) {
   );
 }
 
-function SummarizeAgentOutput({ papers = [] }: { papers: any[] }) {
-  const displaySummaries = papers.length > 0 ? papers : [
-    { title: 'Dynamic Token Routing', summary: 'Introduces a lightweight classifier that routes sub-queries to specialized models based on prompt complexity. DistilBERT-based router trained on 10k prompt pairs. Reduces inference cost by 40-68% with <2% ROUGE-L quality drop. Only tested on English-language prompts' },
-    { title: 'Cost-Aware Scheduling', summary: 'A scheduling algorithm that batches agent tasks by priority and predicted cost. Modified priority queue with token-count heuristics. Reduces per-query expense from $0.12 to $0.04. Assumes homogeneous agent latency' },
-    { title: 'Hallucination in Cascaded Agents', summary: 'First systematic study of hallucination propagation in multi-agent chains. Controlled experiments across 3/5/7-agent depth chains. Cascaded architectures reduce hallucination by 3.2x vs single-model CoT. Tested only on factual QA tasks' },
+function SummarizeAgentOutput({ papers = [], model }: { papers: any[], model?: string }) {
+  const isLive = papers.length > 0;
+  const activeModel = model || 'llama3.1:8b (Ollama)';
+  const displaySummaries = isLive ? papers : [
+    { title: 'Dynamic Token Routing (Demo Example)', summary: 'Introduces a lightweight classifier that routes sub-queries to specialized models based on prompt complexity. DistilBERT-based router trained on 10k prompt pairs. Reduces inference cost by 40-68% with <2% ROUGE-L quality drop.' },
+    { title: 'Cost-Aware Scheduling (Demo Example)', summary: 'A scheduling algorithm that batches agent tasks by priority and predicted cost. Modified priority queue with token-count heuristics. Reduces per-query expense from $0.12 to $0.04.' },
+    { title: 'Hallucination in Cascaded Agents (Demo Example)', summary: 'First systematic study of hallucination propagation in multi-agent chains. Controlled experiments across 3/5/7-agent depth chains. Cascaded architectures reduce hallucination by 3.2x vs single-model CoT.' },
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
-        &gt; MODEL: <code style={{ color: 'var(--accent-primary)' }}>gpt-3.5-turbo</code> | CHUNKING_STRATEGY: <code style={{ color: 'var(--accent-primary)' }}>2000_tokens</code>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+        &gt; MODEL: <code style={{ color: 'var(--accent-primary)' }}>{activeModel}</code> | CHUNKING_STRATEGY: <code style={{ color: 'var(--accent-primary)' }}>2000_tokens</code>
+        {!isLive && <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--warning)', background: 'rgba(255, 183, 3, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>[PREVIEWING DEMO BLUEPRINT]</span>}
       </div>
       {displaySummaries.slice(0, 3).map((s: any, i: number) => (
         <div key={i} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(157, 78, 221, 0.2)', borderRadius: '8px', padding: '1.5rem', borderLeft: '4px solid var(--accent-purple)' }}>
@@ -239,7 +242,7 @@ export default function DiscoveryTab({ initialQuery, executionId, onExecute, onA
   const renderAgentContent = (index: number) => {
     switch (index) {
       case 0: return <SearchAgentOutput papers={resultData?.papers || []} />;
-      case 1: return <SummarizeAgentOutput papers={resultData?.papers || []} />;
+      case 1: return <SummarizeAgentOutput papers={resultData?.papers || []} model={resultData?.model} />;
       case 2: return <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{resultData?.synthesis || SYNTHESIS_MD}</ReactMarkdown></div>;
       case 3: return <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{resultData?.gaps || GAPS_MD}</ReactMarkdown></div>;
       case 4: return <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{resultData?.ideas || IDEAS_MD}</ReactMarkdown></div>;
