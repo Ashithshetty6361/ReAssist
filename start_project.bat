@@ -28,10 +28,21 @@ if %errorlevel% equ 0 (
     echo [+] Ollama is running.
 )
 
+:: Check if port 8000 is in use
+set "BACKEND_PORT=8000"
+netstat -ano | findstr /r ":8000 .*LISTENING" >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [!] Port 8000 is in use. Using port 8001 for Backend...
+    set "BACKEND_PORT=8001"
+)
+
+:: Set frontend env
+echo NEXT_PUBLIC_API_URL=http://localhost:%BACKEND_PORT% > frontend\.env.local
+
 :: Start Backend
 echo.
-echo [*] Starting FastAPI Backend on port 8000...
-start "ReAssist Backend" cmd /k "python -m uvicorn src.api.app:app --reload --port 8000"
+echo [*] Starting FastAPI Backend on port %BACKEND_PORT%...
+start "ReAssist Backend" cmd /k "python -m uvicorn src.api.app:app --reload --port %BACKEND_PORT%"
 
 :: Wait for backend to be ready
 timeout /t 3 /nobreak >nul
@@ -49,9 +60,9 @@ cd ..
 echo.
 echo ========================================
 echo   ReAssist is starting up!
-echo   Backend:  http://localhost:8000
+echo   Backend:  http://localhost:%BACKEND_PORT%
 echo   Frontend: http://localhost:3000
-echo   API Docs: http://localhost:8000/docs
+echo   API Docs: http://localhost:%BACKEND_PORT%/docs
 echo ========================================
 echo.
 echo Press any key to stop all servers...
