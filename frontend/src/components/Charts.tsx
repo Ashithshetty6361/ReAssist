@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from 'react';
+import { apiUrl } from '@/lib/api';
 
 export default function Charts() {
   const [stats, setStats] = useState<any>(null);
@@ -8,7 +9,7 @@ export default function Charts() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('http://localhost:8000/stats/router');
+        const res = await fetch(apiUrl('/stats/router'));
         if (res.ok) {
           const data = await res.json();
           setStats(data);

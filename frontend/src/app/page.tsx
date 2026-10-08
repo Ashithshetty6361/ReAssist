@@ -6,6 +6,7 @@ import IdeationTab from '@/components/IdeationTab';
 import DiscoveryTab from '@/components/DiscoveryTab';
 import ImplementationTab from '@/components/ImplementationTab';
 import SandboxTab from '@/components/SandboxTab';
+import { apiUrl } from '@/lib/api';
 
 // Session Types
 type Message = { role: 'user' | 'assistant', content: string };
@@ -82,7 +83,7 @@ export default function Home() {
     // 1. Create Workspace
     try {
       const wsName = file ? file.name : topic;
-      const wsRes = await fetch('http://localhost:8000/workspaces', {
+      const wsRes = await fetch(apiUrl('/workspaces'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: wsName })
@@ -93,7 +94,7 @@ export default function Home() {
       if (file && strategy === 'rag') {
         const formData = new FormData();
         formData.append('file', file);
-        const docRes = await fetch(`http://localhost:8000/workspaces/${ws.id}/documents`, {
+        const docRes = await fetch(apiUrl(`/workspaces/${ws.id}/documents`), {
           method: 'POST',
           body: formData
         });
@@ -104,7 +105,7 @@ export default function Home() {
       }
       
       // 2. Execute Pipeline
-      const execRes = await fetch(`http://localhost:8000/workspaces/${ws.id}/execute`, {
+      const execRes = await fetch(apiUrl(`/workspaces/${ws.id}/execute`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

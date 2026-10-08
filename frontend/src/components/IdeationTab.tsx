@@ -1,5 +1,6 @@
 "use client";
 import { useState } from 'react';
+import { apiUrl } from '@/lib/api';
 
 export default function IdeationTab({ onSelectTopic }: { onSelectTopic: (topic: string, file?: File | null, strategy?: string) => void }) {
   const [field, setField] = useState('');
@@ -12,7 +13,7 @@ export default function IdeationTab({ onSelectTopic }: { onSelectTopic: (topic: 
     if (!field) return;
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/ideate', {
+      const res = await fetch(apiUrl('/ideate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ field })

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import { apiUrl } from '@/lib/api';
 
 export default function Dashboard() {
   const [query, setQuery] = useState('');
@@ -17,7 +18,7 @@ export default function Dashboard() {
 
     try {
       // Step 1: Request analysis job
-      const res = await fetch('http://localhost:8000/analyze', {
+      const res = await fetch(apiUrl('/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, use_router: true })
@@ -32,7 +33,7 @@ export default function Dashboard() {
       let completed = false;
       while (!completed) {
         await new Promise(resolve => setTimeout(resolve, 2000)); // poll every 2s
-        const pollRes = await fetch(`http://localhost:8000/jobs/${jobId}`);
+        const pollRes = await fetch(apiUrl(`/jobs/${jobId}`));
         const pollData = await pollRes.json();
         
         if (pollData.status === 'completed') {

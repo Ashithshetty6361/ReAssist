@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { apiUrl } from '@/lib/api';
 
 // ─── JSX-Rendered Agent Outputs ──────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ export default function DiscoveryTab({ initialQuery, executionId, onExecute, onA
 
       const interval = setInterval(async () => {
         try {
-          const res = await fetch(`http://localhost:8000/executions/${executionId}`);
+          const res = await fetch(apiUrl(`/executions/${executionId}`));
           if (res.ok) {
             const data = await res.json();
             if (data.status === 'completed') {

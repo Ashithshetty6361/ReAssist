@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from 'react';
+import { apiUrl } from '@/lib/api';
 
 export default function SandboxTab() {
   const [query, setQuery] = useState('');
@@ -15,7 +16,7 @@ export default function SandboxTab() {
     setError('');
 
     try {
-      const res = await fetch('http://localhost:8000/simulate_comparison', {
+      const res = await fetch(apiUrl('/simulate_comparison'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
@@ -38,7 +39,7 @@ export default function SandboxTab() {
     if (status === 'running' && jobId) {
       interval = setInterval(async () => {
         try {
-          const res = await fetch(`http://localhost:8000/executions/${jobId}`);
+          const res = await fetch(apiUrl(`/executions/${jobId}`));
           const data = await res.json();
           if (data.status === 'completed') {
             setStatus('completed');
