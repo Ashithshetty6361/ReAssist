@@ -3,8 +3,7 @@ Idea Generator Agent - Generates novel research ideas
 Single Responsibility: Research idea generation ONLY
 """
 
-import os
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_default_model
 
 
 class IdeaGeneratorAgent:
@@ -13,15 +12,15 @@ class IdeaGeneratorAgent:
     # Define required inputs for context slicing
     required_inputs = ['gaps', 'synthesis']
     
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """
         Initialize Idea Generator Agent
         
         Args:
-            model: OpenAI model to use
+            model: LLM model to use (auto-detected from provider if None)
         """
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = model or get_default_model()
+        self.client = get_llm_client()
     
     def run(self, input_data):
         """
@@ -96,6 +95,6 @@ Generate 5 concrete, actionable research ideas:"""
             }
 
 
-def create_idea_generator_agent(model="gpt-3.5-turbo"):
+def create_idea_generator_agent(model=None):
     """Factory function to create idea generator agent"""
     return IdeaGeneratorAgent(model=model)

@@ -8,8 +8,7 @@ since grading is a simple yes/no classification task.
 """
 
 import os
-from openai import OpenAI
-from src.core.config import DEFAULT_MODEL
+from src.core.llm_provider import get_llm_client, get_grader_model, get_grader_provider
 
 # Load prompt from YAML
 def _load_prompt():
@@ -34,10 +33,10 @@ class RelevanceGrader:
     
     required_inputs = ['papers', 'query']
     
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """Always use cheap model — grading is a simple binary task"""
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = model or get_grader_model()
+        self.client = get_llm_client(get_grader_provider())
         self._prompts = _load_prompt()
     
     def run(self, input_data):
@@ -86,25 +85,29 @@ class RelevanceGrader:
         )
         
         try:
-            from src.models.agent_outputs import RelevanceGrade
-            response = self.client.beta.chat.completions.parse(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self._prompts['system']},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.0,  # Deterministic for grading
-                response_format=RelevanceGrade
+                max_tokens=10
             )
             
-            result = response.choices[0].message.parsed
-            return result.binary_score
+            answer = response.choices[0].message.content.strip().lower()
+            # Extract yes/no from response
+            if 'yes' in answer:
+                return 'yes'
+            elif 'no' in answer:
+                return 'no'
+            return 'yes'  # Default to keeping paper
             
         except Exception:
             # On error, default to 'yes' to avoid dropping valid papers
             return 'yes'
 
 
-def create_relevance_grader(model="gpt-3.5-turbo"):
+def create_relevance_grader(model=None):
     """Factory function — always uses cheap model for grading"""
     return RelevanceGrader(model=model)

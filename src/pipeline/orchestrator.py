@@ -19,6 +19,16 @@ from src.utils.logger import get_logger, reset_logger
 load_dotenv()
 
 
+def _extract_duration_seconds(timing) -> float:
+    """Extract latency in seconds from either a float or a telemetry dict."""
+    if isinstance(timing, dict):
+        return timing.get("latency_ms", 0) / 1000.0
+    try:
+        return float(timing)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 class PipelineError(Exception):
     """Raised when a pipeline stage fails after all retries"""
     pass
@@ -65,9 +75,10 @@ class RootAgent:
 
     def get_performance_summary(self):
         """Return timing data for the last run."""
+        total_time = sum(_extract_duration_seconds(v) for v in self.agent_timings.values())
         return {
             "agent_timings": self.agent_timings,
-            "total_time": sum(self.agent_timings.values()),
+            "total_time": total_time,
             "log_summary": self.logger.get_log_summary(),
         }
 
@@ -116,11 +127,12 @@ class RootAgent:
         self.agent_timings = final_state.get("agent_timings", {})
 
         # Log timings
-        total_time = sum(self.agent_timings.values())
+        total_time = sum(_extract_duration_seconds(v) for v in self.agent_timings.values())
         self.logger.logger.info("\n" + "=" * 80)
         self.logger.logger.info(f"LANGGRAPH PIPELINE COMPLETED (Total: {total_time:.2f}s)")
         self.logger.logger.info("=" * 80)
-        for name, dur in self.agent_timings.items():
+        for name, timing_val in self.agent_timings.items():
+            dur = _extract_duration_seconds(timing_val)
             self.logger.logger.info(f"  {name}: {dur:.2f}s")
         self.logger.save_json_log()
 
@@ -146,8 +158,8 @@ class RootAgent:
             "timestamp": datetime.now().isoformat(),
             "query": query,
             "total_time_seconds": round(total_time, 2),
-            "agent_timings": {k: round(v, 2) for k, v in self.agent_timings.items()},
-            "slowest_agent": max(self.agent_timings, key=self.agent_timings.get)
+            "agent_timings": {k: round(_extract_duration_seconds(v), 2) for k, v in self.agent_timings.items()},
+            "slowest_agent": max(self.agent_timings, key=lambda k: _extract_duration_seconds(self.agent_timings[k]))
                 if self.agent_timings else None,
             "papers_found": len(results.get("papers", [])),
             "ideas_generated": len(results.get("ideas", []))
@@ -243,7 +255,7 @@ class RootAgent:
             }
 
             results["agent_timings"] = self.agent_timings
-            total = sum(self.agent_timings.values())
+            total = sum(_extract_duration_seconds(v) for v in self.agent_timings.values())
             self.logger.logger.info(f"PDF ANALYSIS COMPLETED (Total: {total:.2f}s)")
             self.logger.save_json_log()
 

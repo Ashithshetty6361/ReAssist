@@ -3,8 +3,7 @@ Technique Agent - Suggests alternative algorithmic approaches NOT used in papers
 Single Responsibility: Alternative technique suggestion ONLY
 """
 
-import os
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_default_model
 
 
 class TechniqueAgent:
@@ -13,15 +12,15 @@ class TechniqueAgent:
     # Define required inputs for context slicing
     required_inputs = ['synthesis', 'ideas']
     
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """
         Initialize Technique Agent
         
         Args:
-            model: OpenAI model to use
+            model: LLM model to use (auto-detected from provider if None)
         """
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = model or get_default_model()
+        self.client = get_llm_client()
     
     def run(self, input_data):
         """
@@ -85,6 +84,6 @@ List 3-5 alternative techniques:"""
             }
 
 
-def create_technique_agent(model="gpt-3.5-turbo"):
+def create_technique_agent(model=None):
     """Factory function to create technique agent"""
     return TechniqueAgent(model=model)

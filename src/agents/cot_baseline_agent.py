@@ -3,11 +3,9 @@ CoT Baseline Agent - Runs entire pipeline as single Chain-of-Thought prompt
 Single Responsibility: Baseline comparison ONLY
 """
 
-import os
 import time
 import json
-from openai import OpenAI
-from src.core.config import DEFAULT_MODEL
+from src.core.llm_provider import get_llm_client, get_default_model
 
 
 class CoTBaselineAgent:
@@ -19,9 +17,9 @@ class CoTBaselineAgent:
 
     required_inputs = ['query']
 
-    def __init__(self, model=DEFAULT_MODEL):
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self, model=None):
+        self.model = model or get_default_model()
+        self.client = get_llm_client()
 
     def run(self, input_data: dict) -> dict:
         query = input_data.get('query', '')
@@ -137,6 +135,6 @@ Provide techniques and guidance for each idea."""
             }
 
 
-def create_cot_baseline_agent(model=DEFAULT_MODEL):
+def create_cot_baseline_agent(model=None):
     """Factory function to create CoT baseline agent"""
     return CoTBaselineAgent(model=model)

@@ -8,7 +8,7 @@ import csv
 import json
 import time
 from datetime import datetime
-from agents.cot_baseline_agent import create_cot_baseline_agent
+from src.agents.cot_baseline_agent import create_cot_baseline_agent
 
 
 class Evaluator:
@@ -170,6 +170,23 @@ class Evaluator:
         self._save_report(comparison)
         self._print_comparison(comparison)
         return comparison
+
+    def run_three_way_comparison(self, query: str, papers: list,
+                                multi_agent_results: dict, rag_enabled: bool = False,
+                                rag_results: dict = None) -> dict:
+        """Run 3-way comparison between Multi-Agent, CoT Baseline, and RAG"""
+        from evaluation.rag_evaluator import RAGEvaluator
+        rag_eval = RAGEvaluator()
+        cot_result = self.cot_agent.run({'query': query})
+        cot_output = cot_result.get('output', {}) if cot_result.get('success') else {}
+        rag_out = rag_results or multi_agent_results
+        return rag_eval.compare_three_way(
+            query=query,
+            multi_agent_results=multi_agent_results,
+            cot_results=cot_output,
+            rag_results=rag_out,
+            retrieved_papers=papers
+        )
 
     def _save_report(self, comparison: dict) -> None:
         """Save comparison report as JSON"""

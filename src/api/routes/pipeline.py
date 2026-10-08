@@ -1,31 +1,25 @@
 """
 Pipeline execution routes — Execute + List + Get
+Powered by ResearchService and Service-Layer Abstraction.
 """
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-import os
 import json
 
 from src.core.database import get_db, SessionLocal
 from src.core.auth import get_current_user
 from src.models.orm import (
-    User, Workspace, PipelineExecution, AgentTrace,
-    WorkspaceStatus, ExecutionType
+    User, Workspace, PipelineExecution, WorkspaceStatus, ExecutionType
 )
 from src.api.schemas import QueryRequest
 from src.api.serializers import (
-    serialize_execution, serialize_trace, map_agent_type
+    serialize_execution, serialize_trace
 )
-from src.pipeline.orchestrator import create_root_agent
-from src.router.agent_router import create_router
+from src.services.research_service import get_research_service
+from src.services.storage_service import get_storage_service
 from src.core.config import DEFAULT_MODEL, MAX_PAPERS
-from src.memory.workspace_memory import (
-    load_conversation_context,
-    build_context_summary,
-    save_pipeline_result_as_message
-)
 
 router = APIRouter(tags=["pipeline"])
 
@@ -70,49 +64,17 @@ def execute_pipeline(
     def run_pipeline():
         pdb = SessionLocal()
         try:
-            start = datetime.now(timezone.utc)
-
-            if req.use_router:
-                agent_router = create_router(model=model)
-                routing = agent_router.route(req.query)
-                agent_router.log_decision(req.query, routing)
-
-            # --- PHASE 4: Load Conversational Context ---
-            context = load_conversation_context(ws.id, pdb)
-
-            agent = create_root_agent(model=model, max_papers=max_papers)
-            result = agent.execute_pipeline(query=req.query, conversation_context=context)
-
-            # --- PHASE 4: Save Result ---
-            save_pipeline_result_as_message(ws.id, result, pdb)
-
-            end = datetime.now(timezone.utc)
-            total_ms = int((end - start).total_seconds() * 1000)
-
-            ex = pdb.query(PipelineExecution).filter(PipelineExecution.id == exec_id).first()
-            if ex:
-                ex.status = "completed"
-                ex.total_latency_ms = total_ms
-                ex.completed_at = end
-
-                os.makedirs("data/results", exist_ok=True)
-                result_path = f"data/results/{exec_id}.json"
-                with open(result_path, "w") as f:
-                    json.dump(result, f, default=str)
-                ex.result_ref = result_path
-
-                if isinstance(result, dict) and 'agent_timings' in result:
-                    for agent_name, timing in result['agent_timings'].items():
-                        trace = AgentTrace(
-                            execution_id=exec_id,
-                            agent_type=map_agent_type(agent_name),
-                            input_tokens=timing.get('input_tokens', 0),
-                            output_tokens=timing.get('output_tokens', 0),
-                            latency_ms=timing.get('latency_ms', 0),
-                        )
-                        pdb.add(trace)
-
-                pdb.commit()
+            research_service = get_research_service()
+            research_service.run_pipeline_sync(
+                workspace_id=ws.id,
+                execution_id=exec_id,
+                query=req.query,
+                document_id=req.document_id,
+                model=model,
+                max_papers=max_papers,
+                use_router=req.use_router,
+                db=pdb,
+            )
         except Exception as e:
             ex = pdb.query(PipelineExecution).filter(PipelineExecution.id == exec_id).first()
             if ex:
@@ -155,10 +117,14 @@ def get_execution(
     if not ws:
         raise HTTPException(403, "Access denied")
 
+    storage = get_storage_service()
     result_data = None
-    if ex.result_ref and os.path.exists(ex.result_ref):
-        with open(ex.result_ref, "r") as f:
-            result_data = json.load(f)
+    if ex.result_ref:
+        try:
+            raw_bytes = storage.retrieve_artifact(ex.result_ref)
+            result_data = json.loads(raw_bytes.decode("utf-8"))
+        except Exception:
+            pass
 
     data = serialize_execution(ex)
     data["result"] = result_data

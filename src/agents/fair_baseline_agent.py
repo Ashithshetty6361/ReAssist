@@ -3,9 +3,8 @@ Fair Baseline - Structured Chain-of-Thought Single Prompt
 Provides fair comparison by receiving same context as multi-agent
 """
 
-import os
 import time
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_default_model
 
 
 class FairBaselineAgent:
@@ -22,15 +21,15 @@ class FairBaselineAgent:
     
     required_inputs = ['papers']
     
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """
         Initialize Fair Baseline Agent
         
         Args:
-            model: OpenAI model to use
+            model: LLM model to use (auto-detected from provider if None)
         """
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = model or get_default_model()
+        self.client = get_llm_client()
     
     def run(self, input_data):
         """
@@ -157,6 +156,6 @@ Content: {abstract[:800]}{'...' if len(abstract) > 800 else ''}
         return '\n'.join(formatted)
 
 
-def create_fair_baseline_agent(model="gpt-3.5-turbo"):
+def create_fair_baseline_agent(model=None):
     """Factory function to create Fair Baseline Agent"""
     return FairBaselineAgent(model=model)

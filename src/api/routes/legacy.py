@@ -12,6 +12,7 @@ import json
 from src.core.database import get_db, SessionLocal
 from src.core.auth import get_current_user
 from src.core.config import DEFAULT_MODEL
+from src.core.llm_provider import get_llm_client, get_default_model
 from src.models.orm import (
     User, Workspace, PipelineExecution, ExecutionType
 )
@@ -32,16 +33,28 @@ def route_query(request: RouterRequest):
 
 @router.post("/ideate")
 def ideate_topics(request: IdeateRequest):
-    import openai
     try:
-        response = openai.ChatCompletion.create(
-            model=request.model or DEFAULT_MODEL,
+        client = get_llm_client()
+        model_name = request.model or get_default_model()
+        response = client.chat.completions.create(
+            model=model_name,
             messages=[
-                {"role": "system", "content": "You are a research ideation bot. Given a broad field, output 3 highly niche, compelling research topics with 1 sentence explaining their novelty. Output ONLY a valid JSON array of strings."},
+                {"role": "system", "content": "You are a research ideation bot. Given a broad field, output 3 highly niche, compelling research topics with 1 sentence explaining their novelty. Output ONLY a valid JSON array of strings. Example: [\"Topic 1 - Description\", \"Topic 2 - Description\", \"Topic 3 - Description\"]"},
                 {"role": "user", "content": f"Field: {request.field}"}
             ]
         )
         content = response.choices[0].message.content
+        
+        # Robust JSON extraction
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        content = content.strip()
+        
         try:
             topics = json.loads(content)
         except Exception:

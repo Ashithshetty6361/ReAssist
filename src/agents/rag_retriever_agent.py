@@ -47,8 +47,7 @@ class RAGRetrieverAgent:
         Chunks text, embeds, and stores in ChromaDB.
         """
         try:
-            from utils.pdf_parser import extract_text_from_pdf
-            from openai import OpenAI
+            from src.utils.pdf_parser import extract_text_from_pdf
             import hashlib
 
             pdf_data = extract_text_from_pdf(filepath)
@@ -62,7 +61,6 @@ class RAGRetrieverAgent:
                 for i in range(0, len(words), RAG_CHUNK_SIZE)
             ]
 
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             collection = self._get_collection()
 
             doc_id = hashlib.md5(filepath.encode()).hexdigest()[:8]

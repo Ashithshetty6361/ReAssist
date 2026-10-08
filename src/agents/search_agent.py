@@ -6,6 +6,7 @@ Single Responsibility: Paper discovery and retrieval ONLY
 import arxiv
 import requests
 from src.core.config import MAX_PAPERS
+from src.core.llm_provider import get_llm_client, get_grader_model
 
 
 class SearchAgent:
@@ -51,11 +52,10 @@ class SearchAgent:
             
         if conversation_context:
             try:
-                import os
-                from openai import OpenAI
-                client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                client = get_llm_client()
+                model = get_grader_model()
                 resp = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model=model,
                     messages=[
                         {"role": "system", "content": "You are a search query optimizer. Given a search query and a conversation context, rewrite the query so it is self-contained and resolves any ambiguous references (like 'that', 'it', 'these') based on the context. Return ONLY the rewritten query, nothing else."},
                         {"role": "user", "content": f"Context:\n{conversation_context}\n\nOriginal Query: {query}"}

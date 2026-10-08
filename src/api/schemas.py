@@ -38,6 +38,7 @@ class QueryRequest(BaseModel):
     max_papers: Optional[int] = None
     use_router: Optional[bool] = True
     execution_type: Optional[str] = "MULTI_AGENT"
+    document_id: Optional[str] = None
 
 
 class RouterRequest(BaseModel):

@@ -9,7 +9,7 @@ Lightweight but production-grade auth layer.
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from passlib.context import CryptContext
+import bcrypt
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -23,18 +23,17 @@ SECRET_KEY = os.getenv("JWT_SECRET", "reassist-dev-secret-change-in-prod")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 48
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
 
 
 # ─── Password Utils ──────────────────────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
 
 
 # ─── Token Utils ──────────────────────────────────────────────────────────────

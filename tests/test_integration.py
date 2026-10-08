@@ -4,12 +4,14 @@ Tests: Query mode, context slicing, 3-way evaluation
 """
 
 import os
+import pytest
 from dotenv import load_dotenv
 from src.pipeline.orchestrator import create_root_agent
 from evaluation.evaluator import create_evaluator
 
 load_dotenv()
 
+@pytest.mark.skipif(not os.getenv("RUN_INTEGRATION_TESTS"), reason="Requires live LLM API keys and model inference")
 def test_query_mode():
     """Test query mode with fair baseline evaluation"""
     

@@ -1,19 +1,18 @@
 """
 Document upload routes — RAG file uploads with vector embedding
+Powered by StorageService and RAGService.
 """
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
-import hashlib
-import os
 
 from src.core.database import get_db
 from src.core.auth import get_current_user
 from src.models.orm import User, Workspace, Document
-from src.rag.document_processor import process_upload
-from src.rag.retriever import retrieve_relevant_chunks
+from src.services.storage_service import get_storage_service
+from src.services.rag_service import get_rag_service
 
 router = APIRouter(tags=["documents"])
 
@@ -41,28 +40,32 @@ async def upload_document(
     db: Session = Depends(get_db)
 ):
     ws = _get_workspace_or_404(workspace_id, user.id, db)
+    storage_service = get_storage_service()
+    rag_service = get_rag_service()
 
     content = await file.read()
-    file_hash = hashlib.sha256(content).hexdigest()
+    file_hash = storage_service.calculate_sha256(content)
 
     # Dedup check
-    existing = db.query(Document).filter(Document.file_hash == file_hash).first()
-    if existing and existing.workspace_id == ws.id:
+    existing = db.query(Document).filter(Document.file_hash == file_hash, Document.workspace_id == ws.id).first()
+    if existing:
         return {"message": "File already uploaded to this workspace", "document_id": existing.id}
 
-    os.makedirs("data/uploads", exist_ok=True)
-    blob_path = f"data/uploads/{file_hash}_{file.filename}"
-    with open(blob_path, "wb") as f:
-        f.write(content)
+    # Store file via storage service (Local disk or S3)
+    stored = storage_service.store_document(content=content, filename=file.filename, workspace_id=ws.id)
 
-    # ── NEW: Chunk, embed, and store in ChromaDB ─────────────────────────
-    rag_result = process_upload(blob_path, ws.id, file.filename)
+    # Chunk, embed, and store in ChromaDB
+    rag_result = rag_service.ingest_document(
+        file_path=stored["blob_url"],
+        workspace_id=ws.id,
+        filename=file.filename
+    )
 
     doc = Document(
         workspace_id=ws.id,
         filename=file.filename,
         file_hash=file_hash,
-        blob_url=blob_path,
+        blob_url=stored["blob_url"],
         vector_namespace=f"ws_{ws.id}"
     )
     db.add(doc)
@@ -73,6 +76,7 @@ async def upload_document(
         "document_id": doc.id,
         "filename": doc.filename,
         "hash": file_hash,
+        "accessible_url": stored["accessible_url"],
         "rag": rag_result,
     }
 
@@ -86,8 +90,9 @@ def rag_query(
 ):
     """Query the RAG vector store for a workspace's documents."""
     ws = _get_workspace_or_404(workspace_id, user.id, db)
+    rag_service = get_rag_service()
 
-    chunks = retrieve_relevant_chunks(ws.id, req.query, k=req.k)
+    chunks = rag_service.retrieve_context(ws.id, req.query, k=req.k or 10)
 
     if not chunks:
         return {

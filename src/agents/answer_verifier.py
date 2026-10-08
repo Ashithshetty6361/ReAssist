@@ -9,7 +9,7 @@ retrieved paper summaries. Flags unsupported claims.
 
 import os
 import json
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_grader_model, get_grader_provider
 
 # Load prompt from YAML
 def _load_prompt():
@@ -34,9 +34,9 @@ class AnswerVerifier:
     
     required_inputs = ['synthesis', 'papers', 'gaps']
     
-    def __init__(self, model="gpt-3.5-turbo"):
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self, model=None):
+        self.model = model or get_grader_model()
+        self.client = get_llm_client(get_grader_provider())
         self._prompts = _load_prompt()
     
     def run(self, input_data):
@@ -64,27 +64,47 @@ class AnswerVerifier:
         )
         
         try:
-            from src.models.agent_outputs import VerificationResult
-            response = self.client.beta.chat.completions.parse(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": self._prompts['system']},
+                    {"role": "system", "content": self._prompts['system'] + "\nRespond ONLY with a JSON object: {\"faithful\": true/false, \"confidence\": 0.0-1.0, \"unsupported_claims\": [], \"summary\": \"...\"}. No markdown, no explanation."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.0,  # Deterministic for verification
-                response_format=VerificationResult
+                max_tokens=500
             )
             
-            result = response.choices[0].message.parsed
+            content = response.choices[0].message.content.strip()
+            # Robust JSON extraction
+            if content.startswith("```json"):
+                content = content[7:]
+            if content.startswith("```"):
+                content = content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
             
-            return {
-                'faithful': result.faithful,
-                'confidence': result.confidence,
-                'unsupported_claims': result.unsupported_claims,
-                'verification_summary': result.summary,
-                'success': True,
-                'error': None
-            }
+            try:
+                parsed = json.loads(content)
+                return {
+                    'faithful': parsed.get('faithful', True),
+                    'confidence': parsed.get('confidence', 0.5),
+                    'unsupported_claims': parsed.get('unsupported_claims', []),
+                    'verification_summary': parsed.get('summary', ''),
+                    'success': True,
+                    'error': None
+                }
+            except json.JSONDecodeError:
+                # If JSON parsing fails, make a best-effort interpretation
+                is_faithful = 'unfaithful' not in content.lower() and 'not faithful' not in content.lower()
+                return {
+                    'faithful': is_faithful,
+                    'confidence': 0.5,
+                    'unsupported_claims': [],
+                    'verification_summary': content[:200],
+                    'success': True,
+                    'error': None
+                }
             
         except Exception as e:
             return {
@@ -106,6 +126,6 @@ class AnswerVerifier:
         return "\n---\n".join(parts) if parts else "No papers available"
 
 
-def create_answer_verifier(model="gpt-3.5-turbo"):
+def create_answer_verifier(model=None):
     """Factory function"""
     return AnswerVerifier(model=model)

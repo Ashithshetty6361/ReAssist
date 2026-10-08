@@ -3,8 +3,7 @@ Guidance Agent - Provides research guidance for pursuing ideas
 Single Responsibility: Difficulty assessment, skills, and timeline estimation ONLY
 """
 
-import os
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_default_model
 
 
 class GuidanceAgent:
@@ -13,15 +12,15 @@ class GuidanceAgent:
     # Define required_inputs for context slicing
     required_inputs = ['ideas', 'techniques']
     
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """
         Initialize Guidance Agent
         
         Args:
-            model: OpenAI model to use
+            model: LLM model to use (auto-detected from provider if None)
         """
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = model or get_default_model()
+        self.client = get_llm_client()
     
     def run(self, input_data):
         """
@@ -86,6 +85,6 @@ Be specific and realistic. Focus ONLY on providing guidance."""
             }
 
 
-def create_guidance_agent(model="gpt-3.5-turbo"):
+def create_guidance_agent(model=None):
     """Factory function to create guidance agent"""
     return GuidanceAgent(model=model)

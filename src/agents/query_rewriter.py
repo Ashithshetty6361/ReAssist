@@ -8,7 +8,7 @@ and triggers a Search retry.
 """
 
 import os
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_grader_model, get_grader_provider
 
 # Load prompt from YAML
 def _load_prompt():
@@ -30,9 +30,9 @@ class QueryRewriter:
     
     required_inputs = ['query']
     
-    def __init__(self, model="gpt-3.5-turbo"):
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    def __init__(self, model=None):
+        self.model = model or get_grader_model()
+        self.client = get_llm_client(get_grader_provider())
         self._prompts = _load_prompt()
     
     def run(self, input_data):
@@ -80,6 +80,6 @@ class QueryRewriter:
             }
 
 
-def create_query_rewriter(model="gpt-3.5-turbo"):
+def create_query_rewriter(model=None):
     """Factory function"""
     return QueryRewriter(model=model)

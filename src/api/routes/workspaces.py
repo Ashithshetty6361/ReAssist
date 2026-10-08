@@ -38,6 +38,7 @@ def create_workspace(
 ):
     ws = Workspace(user_id=user.id, name=req.name)
     db.add(ws)
+    db.flush()  # Ensure ws.id is generated before referencing it
     welcome = ChatMessage(
         workspace_id=ws.id,
         role=MessageRole.ASSISTANT,

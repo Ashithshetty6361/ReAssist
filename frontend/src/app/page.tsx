@@ -16,6 +16,8 @@ type ProjectSession = {
   query: string;
   pipelineData: any;
   messages: Message[];
+  executionId?: string;
+  workspaceId?: string;
 }
 
 export default function Home() {
@@ -76,8 +78,56 @@ export default function Home() {
   const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
 
   // Pipeline Flow Handlers
-  const handleSelectTopic = (topic: string) => {
-    updateSession({ query: topic, activeStage: 'discovery' });
+  const handleSelectTopic = async (topic: string, file?: File | null, strategy?: string) => {
+    // 1. Create Workspace
+    try {
+      const wsName = file ? file.name : topic;
+      const wsRes = await fetch('http://localhost:8000/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: wsName })
+      });
+      const ws = await wsRes.json();
+      
+      let documentId = null;
+      if (file && strategy === 'rag') {
+        const formData = new FormData();
+        formData.append('file', file);
+        const docRes = await fetch(`http://localhost:8000/workspaces/${ws.id}/documents`, {
+          method: 'POST',
+          body: formData
+        });
+        const docData = await docRes.json();
+        if (docData.document_id) {
+          documentId = docData.document_id;
+        }
+      }
+      
+      // 2. Execute Pipeline
+      const execRes = await fetch(`http://localhost:8000/workspaces/${ws.id}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          query: topic || 'RAG Document Analysis', 
+          max_papers: 3, 
+          use_router: true, 
+          execution_type: 'multi_agent',
+          document_id: documentId
+        })
+      });
+      const exec = await execRes.json();
+      
+      updateSession({ 
+        query: topic, 
+        activeStage: 'discovery', 
+        workspaceId: ws.id, 
+        executionId: exec.execution_id 
+      });
+    } catch (err) {
+      console.error('Failed to start pipeline', err);
+      // Fallback for mockup if backend fails
+      updateSession({ query: topic, activeStage: 'discovery' });
+    }
   };
 
   const handleAnalysisComplete = (data: any) => {
@@ -231,7 +281,7 @@ export default function Home() {
             ) : (
                <>
                  {activeSession.activeStage === 'ideation' && <IdeationTab onSelectTopic={handleSelectTopic} />}
-                 {activeSession.activeStage === 'discovery' && <DiscoveryTab initialQuery={activeSession.query} onAnalysisComplete={handleAnalysisComplete} />}
+                 {activeSession.activeStage === 'discovery' && <DiscoveryTab initialQuery={activeSession.query} executionId={activeSession.executionId} onExecute={handleSelectTopic} onAnalysisComplete={handleAnalysisComplete} />}
                  {activeSession.activeStage === 'implementation' && <ImplementationTab resultData={activeSession.pipelineData} onInlineChat={sendChatMessage} />}
                </>
             )}

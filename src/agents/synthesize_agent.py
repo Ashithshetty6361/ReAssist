@@ -3,8 +3,7 @@ Synthesizer Agent - Combines knowledge across multiple papers
 Single Responsibility: Cross-paper knowledge synthesis ONLY
 """
 
-import os
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_default_model
 
 
 class SynthesizerAgent:
@@ -13,15 +12,15 @@ class SynthesizerAgent:
     # Define required inputs for context slicing
     required_inputs = ['papers']
     
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """
         Initialize Synthesizer Agent
         
         Args:
-            model: OpenAI model to use
+            model: LLM model to use (auto-detected from provider if None)
         """
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = model or get_default_model()
+        self.client = get_llm_client()
     
     def run(self, input_data):
         """
@@ -118,6 +117,6 @@ Summary: {paper.get('summary', paper.get('abstract', ''))}
         return "\n---\n".join(formatted)
 
 
-def create_synthesizer_agent(model="gpt-3.5-turbo"):
+def create_synthesizer_agent(model=None):
     """Factory function to create synthesizer agent"""
     return SynthesizerAgent(model=model)

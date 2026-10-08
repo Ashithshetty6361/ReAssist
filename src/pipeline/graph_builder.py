@@ -31,10 +31,11 @@ from src.agents.relevance_grader import create_relevance_grader
 from src.agents.query_rewriter import create_query_rewriter
 from src.agents.answer_verifier import create_answer_verifier
 from src.agents.web_search_agent import create_web_search_agent
+from src.agents.rag_retriever_agent import create_rag_retriever_agent
 from src.core.config import (
-    RELEVANCE_THRESHOLD, MAX_QUERY_REWRITES,
-    GRADER_MODEL, DEFAULT_MODEL, MAX_PAPERS
+    RELEVANCE_THRESHOLD, MAX_QUERY_REWRITES, MAX_PAPERS
 )
+from src.core.llm_provider import get_default_model, get_grader_model
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -44,8 +45,10 @@ from src.core.config import (
 _agents = {}
 
 
-def _get_agents(model: str = DEFAULT_MODEL, max_papers: int = MAX_PAPERS):
+def _get_agents(model: str | None = None, max_papers: int = MAX_PAPERS):
     """Lazy-init all 11 agents and cache them."""
+    model = model or get_default_model()
+    grader_model = get_grader_model()
     key = (model, max_papers)
     if key not in _agents:
         _agents[key] = {
@@ -56,10 +59,11 @@ def _get_agents(model: str = DEFAULT_MODEL, max_papers: int = MAX_PAPERS):
             "idea_generator": create_idea_generator_agent(model=model),
             "technique": create_technique_agent(model=model),
             "guidance": create_guidance_agent(model=model),
-            "grader": create_relevance_grader(model=GRADER_MODEL),
-            "rewriter": create_query_rewriter(model=GRADER_MODEL),
-            "verifier": create_answer_verifier(model=GRADER_MODEL),
+            "grader": create_relevance_grader(model=grader_model),
+            "rewriter": create_query_rewriter(model=grader_model),
+            "verifier": create_answer_verifier(model=grader_model),
             "web_search": create_web_search_agent(),
+            "rag": create_rag_retriever_agent(),
         }
     return _agents[key]
 
@@ -90,6 +94,21 @@ def _run_with_retry(agent, agent_name, input_data, max_retries=2):
 # Node functions — each takes PipelineState, returns partial state update
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def rag_retriever_node(state: PipelineState) -> dict:
+    """Retrieve papers from ChromaDB for RAG."""
+    agents = _get_agents()
+    start = time.time()
+    input_data = {"query": state["query"]}
+    result = _run_with_retry(agents["rag"], "RAGRetrieverAgent", input_data)
+    elapsed = time.time() - start
+
+    timings = dict(state.get("agent_timings", {}))
+    timings["rag_retrieval"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
+
+    papers = result.get("papers", []) if result.get("success") else []
+    return {"papers": papers, "agent_timings": timings}
+
+
 def search_node(state: PipelineState) -> dict:
     """Search for papers using the current query."""
     agents = _get_agents()
@@ -101,9 +120,9 @@ def search_node(state: PipelineState) -> dict:
     timings = dict(state.get("agent_timings", {}))
     rewrite_count = state.get("rewrite_count", 0)
     if rewrite_count == 0:
-        timings["search"] = elapsed
+        timings["search"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
     else:
-        timings[f"search_rewrite_{rewrite_count}"] = elapsed
+        timings[f"search_rewrite_{rewrite_count}"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     papers = result.get("papers", []) if result.get("success") else []
     # Merge with any existing papers from previous rewrite iterations
@@ -125,7 +144,7 @@ def grade_node(state: PipelineState) -> dict:
 
     timings = dict(state.get("agent_timings", {}))
     rc = state.get("rewrite_count", 0)
-    timings[f"grading{'_r' + str(rc) if rc > 0 else ''}"] = elapsed
+    timings[f"grading{'_r' + str(rc) if rc > 0 else ''}"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     if result.get("success"):
         graded_papers = result.get("papers", [])
@@ -158,7 +177,7 @@ def rewrite_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings[f"rewrite_{rc}"] = elapsed
+    timings[f"rewrite_{rc}"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     new_query = result.get("rewritten_query", state["query"]) if result.get("success") else state["query"]
     return {
@@ -176,7 +195,7 @@ def web_search_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["web_search_fallback"] = elapsed
+    timings["web_search_fallback"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     papers = list(state.get("papers", []))
     if result.get("success") and result.get("papers"):
@@ -202,7 +221,7 @@ def summarize_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["summarizer"] = elapsed
+    timings["summarizer"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     if result.get("success"):
         return {"papers": result["papers"], "agent_timings": timings}
@@ -218,7 +237,7 @@ def synthesize_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["synthesizer"] = elapsed
+    timings["synthesizer"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     if result.get("success"):
         return {"synthesis": result["synthesis"], "agent_timings": timings}
@@ -233,7 +252,7 @@ def gap_finder_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["gap_finder"] = elapsed
+    timings["gap_finder"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     if result.get("success"):
         return {"gaps": result["gaps"], "agent_timings": timings}
@@ -251,7 +270,7 @@ def idea_generator_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["idea_generator"] = elapsed
+    timings["idea_generator"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     if result.get("success"):
         return {"ideas": result["ideas"], "agent_timings": timings}
@@ -269,7 +288,7 @@ def technique_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["technique"] = elapsed
+    timings["technique"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     if result.get("success"):
         return {"techniques": result["techniques"], "agent_timings": timings}
@@ -287,7 +306,7 @@ def guidance_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["guidance"] = elapsed
+    timings["guidance"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     if result.get("success"):
         return {"guidance": result["guidance"], "agent_timings": timings}
@@ -306,7 +325,7 @@ def verify_node(state: PipelineState) -> dict:
     elapsed = time.time() - start
 
     timings = dict(state.get("agent_timings", {}))
-    timings["verification"] = elapsed
+    timings["verification"] = {"latency_ms": int(elapsed * 1000), "input_tokens": 0, "output_tokens": 0}
 
     verification = {
         "faithful": result.get("faithful", True),
@@ -359,6 +378,7 @@ def build_pipeline_graph() -> StateGraph:
     graph = StateGraph(PipelineState)
 
     # Register all nodes
+    graph.add_node("rag_retriever_node", rag_retriever_node)
     graph.add_node("search_node", search_node)
     graph.add_node("grade_node", grade_node)
     graph.add_node("rewrite_node", rewrite_node)
@@ -372,10 +392,17 @@ def build_pipeline_graph() -> StateGraph:
     graph.add_node("verify_node", verify_node)
 
     # ─── Entry ───────────────────────────────────────────────────────────
-    graph.set_entry_point("search_node")
+    graph.set_conditional_entry_point(
+        lambda s: "rag_retriever_node" if s.get("mode") == "pdf" else "search_node",
+        {
+            "rag_retriever_node": "rag_retriever_node",
+            "search_node": "search_node",
+        }
+    )
 
-    # ─── Search -> Grade -> [grade_router] ───────────────────────────────
+    # ─── Search/RAG -> Grade -> [grade_router] ───────────────────────────
     graph.add_edge("search_node", "grade_node")
+    graph.add_edge("rag_retriever_node", "grade_node")
     graph.add_conditional_edges("grade_node", grade_router, {
         "summarize_node": "summarize_node",
         "rewrite_node": "rewrite_node",

@@ -3,8 +3,7 @@ Gap Finder Agent - Identifies research gaps and missing areas
 Single Responsibility: Research gap identification ONLY
 """
 
-import os
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_default_model
 
 
 class GapFinderAgent:
@@ -13,15 +12,15 @@ class GapFinderAgent:
     # Define required inputs for context slicing
     required_inputs = ['synthesis']
     
-    def __init__(self, model="gpt-3.5-turbo"):
+    def __init__(self, model=None):
         """
         Initialize Gap Finder Agent
         
         Args:
-            model: OpenAI model to use
+            model: LLM model to use (auto-detected from provider if None)
         """
-        self.model = model
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = model or get_default_model()
+        self.client = get_llm_client()
     
     def run(self, input_data):
         """
@@ -93,6 +92,6 @@ Provide a structured list of gaps:"""
             }
 
 
-def create_gap_finder_agent(model="gpt-3.5-turbo"):
+def create_gap_finder_agent(model=None):
     """Factory function to create gap finder agent"""
     return GapFinderAgent(model=model)

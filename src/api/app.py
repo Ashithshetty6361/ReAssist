@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from src.core.database import init_db
 from src.core.config import validate_environment
-from src.api.routes import auth, workspaces, pipeline, documents, legacy
+from src.api.routes import auth, workspaces, pipeline, documents, legacy, observability, export
 
 # Validate environment on import
 try:
@@ -21,7 +21,7 @@ except EnvironmentError as e:
 app = FastAPI(
     title="ReAssist API",
     description="Research Intelligence Engine — Multi-Agent Pipeline (Production)",
-    version="3.1.0"
+    version="3.2.0"
 )
 
 app.add_middleware(
@@ -37,6 +37,8 @@ app.include_router(auth.router)
 app.include_router(workspaces.router)
 app.include_router(pipeline.router)
 app.include_router(documents.router)
+app.include_router(observability.router)
+app.include_router(export.router)
 app.include_router(legacy.router)
 
 
@@ -52,7 +54,7 @@ def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": "3.1.0",
+        "version": "3.2.0",
         "database": "connected"
     }
 

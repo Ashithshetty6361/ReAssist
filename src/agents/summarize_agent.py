@@ -3,8 +3,7 @@ Summarizer Agent - Summarizes individual research papers using chunking
 Single Responsibility: Paper summarization with long context handling ONLY
 """
 
-import os
-from openai import OpenAI
+from src.core.llm_provider import get_llm_client, get_default_model
 from src.utils.helpers import chunk_text, clean_text
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -16,17 +15,17 @@ class SummarizerAgent:
     # Define required inputs for context slicing
     required_inputs = ['papers']
     
-    def __init__(self, model="gpt-3.5-turbo", max_chunk_tokens=2000):
+    def __init__(self, model=None, max_chunk_tokens=2000):
         """
         Initialize Summarizer Agent
         
         Args:
-            model: OpenAI model to use
+            model: LLM model to use (auto-detected from provider if None)
             max_chunk_tokens: Maximum tokens per chunk
         """
-        self.model = model
+        self.model = model or get_default_model()
         self.max_chunk_tokens = max_chunk_tokens
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client = get_llm_client()
     
     def run(self, input_data):
         papers = input_data.get('papers', [])
@@ -136,6 +135,6 @@ Provide a unified summary:"""
         return response.choices[0].message.content.strip()
 
 
-def create_summarizer_agent(model="gpt-3.5-turbo"):
+def create_summarizer_agent(model=None):
     """Factory function to create summarizer agent"""
     return SummarizerAgent(model=model)

@@ -45,50 +45,82 @@ def print_results(results):
         print(f"   Source: {paper.get('source', 'Unknown')}")
 
     # Synthesis
-    synthesis = results.get('synthesis') or {}
-    if synthesis.get('synthesis_text'):
+    synthesis = results.get('synthesis')
+    synthesis_text = synthesis.get('synthesis_text') if isinstance(synthesis, dict) else synthesis if isinstance(synthesis, str) else None
+    if synthesis_text:
         print("\n" + "=" * 80)
         print("📊 KNOWLEDGE SYNTHESIS")
         print("=" * 80)
-        print(synthesis['synthesis_text'])
+        print(synthesis_text)
 
     # Research Gaps
-    gaps = results.get('gaps') or {}
-    if gaps.get('gaps_text'):
+    gaps = results.get('gaps')
+    gaps_text = gaps.get('gaps_text') if isinstance(gaps, dict) else gaps if isinstance(gaps, str) else None
+    if gaps_text:
         print("\n" + "=" * 80)
         print("🔍 RESEARCH GAPS IDENTIFIED")
         print("=" * 80)
-        print(gaps['gaps_text'])
+        print(gaps_text)
 
     # Research Ideas
-    ideas = results.get('ideas') or {}
-    if ideas.get('ideas_text'):
+    ideas = results.get('ideas')
+    if isinstance(ideas, list):
+        print("\n" + "=" * 80)
+        print("💡 NOVEL RESEARCH IDEAS")
+        print("=" * 80)
+        for idx, idea in enumerate(ideas):
+            if isinstance(idea, dict):
+                print(f"\n{idx+1}. {idea.get('title', 'Idea')}")
+                if idea.get('hypothesis'):
+                    print(f"   Hypothesis: {idea.get('hypothesis')}")
+            else:
+                print(f"\n{idx+1}. {idea}")
+    elif isinstance(ideas, dict) and ideas.get('ideas_text'):
         print("\n" + "=" * 80)
         print("💡 NOVEL RESEARCH IDEAS")
         print("=" * 80)
         print(ideas['ideas_text'])
+    elif isinstance(ideas, str):
+        print("\n" + "=" * 80)
+        print("💡 NOVEL RESEARCH IDEAS")
+        print("=" * 80)
+        print(ideas)
 
     # Technique Suggestions
-    techniques = results.get('techniques') or {}
-    if techniques.get('techniques_text'):
+    techniques = results.get('techniques')
+    techniques_text = techniques.get('techniques_text') if isinstance(techniques, dict) else techniques if isinstance(techniques, str) else None
+    if techniques_text:
         print("\n" + "=" * 80)
         print("🛠️  ALTERNATIVE TECHNIQUES & GUIDANCE")
         print("=" * 80)
-        print(techniques['techniques_text'])
+        print(techniques_text)
 
     print("\n" + "=" * 80)
 
 
 def validate_api_key():
-    """Validate that OpenAI API key is set"""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here":
-        print("❌ ERROR: OpenAI API key not configured!")
-        print("\nPlease set your API key in one of these ways:")
-        print("1. Create a .env file with: OPENAI_API_KEY=your_key_here")
-        print("2. Set environment variable: set OPENAI_API_KEY=your_key_here")
-        print("\nGet your API key from: https://platform.openai.com/api-keys")
-        return False
+    """Validate that required API keys are set based on active provider"""
+    from src.core.llm_provider import get_provider
+
+    provider = get_provider()
+
+    if provider == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key == "your_openai_api_key_here":
+            print("❌ ERROR: OpenAI API key not configured!")
+            print("\nPlease set your API key in one of these ways:")
+            print("1. Create a .env file with: OPENAI_API_KEY=your_key_here")
+            print("2. Set environment variable: set OPENAI_API_KEY=your_key_here")
+            print("3. Or switch to free models: set LLM_PROVIDER=ollama in .env")
+            return False
+    elif provider == "huggingface":
+        hf_key = os.getenv("HF_API_KEY")
+        if not hf_key or hf_key == "your_huggingface_api_key_here":
+            print("❌ ERROR: HuggingFace API key not configured!")
+            print("\nGet a free token at: https://huggingface.co/settings/tokens")
+            return False
+    # Ollama: no API key needed
+    print(f"✅ LLM Provider: {provider.upper()}")
     return True
 
 
@@ -111,22 +143,40 @@ def get_user_query():
 
 def get_configuration():
     """Get configuration from user"""
-    print("\n⚙️  Configuration:")
+    from src.core.llm_provider import get_provider, get_default_model
+
+    provider = get_provider()
+    print(f"\n⚙️  Configuration:")
+    print(f"   Active Provider: {provider.upper()}")
 
     # Model selection
-    print("\nSelect model:")
-    print("1. gpt-3.5-turbo (faster, cheaper)")
-    print("2. gpt-4 (better quality, slower, more expensive)")
-    print("3. gpt-4-turbo-preview (best quality)")
-
-    model_choice = input("\nChoice (1-3, default 1): ").strip() or "1"
-
-    model_map = {
-        "1": "gpt-3.5-turbo",
-        "2": "gpt-4",
-        "3": "gpt-4-turbo-preview"
-    }
-    model = model_map.get(model_choice, "gpt-3.5-turbo")
+    if provider == "openai":
+        print("\nSelect model:")
+        print("1. gpt-3.5-turbo (faster, cheaper)")
+        print("2. gpt-4o-mini (good quality, affordable)")
+        print("3. gpt-4o (best quality)")
+        model_choice = input("\nChoice (1-3, default 1): ").strip() or "1"
+        model_map = {
+            "1": "gpt-3.5-turbo",
+            "2": "gpt-4o-mini",
+            "3": "gpt-4o",
+        }
+        model = model_map.get(model_choice, "gpt-3.5-turbo")
+    elif provider == "ollama":
+        print("\nSelect model:")
+        print("1. llama3.1:8b-instruct-q4_K_M (recommended, balanced)")
+        print("2. phi3:mini (fast, lightweight)")
+        print("3. mistral:7b-instruct (good quality)")
+        model_choice = input("\nChoice (1-3, default 1): ").strip() or "1"
+        model_map = {
+            "1": "llama3.1:8b-instruct-q4_K_M",
+            "2": "phi3:mini",
+            "3": "mistral:7b-instruct",
+        }
+        model = model_map.get(model_choice, "llama3.1:8b-instruct-q4_K_M")
+    else:
+        model = get_default_model()
+        print(f"\n   Using default model: {model}")
 
     # Max papers
     max_papers_input = input("\nNumber of papers to analyze (default 5): ").strip() or "5"

@@ -5,7 +5,7 @@ Provides context manager and decorator for timing operations
 
 import time
 from functools import wraps
-from utils.logger import get_logger
+from src.utils.logger import get_logger
 
 
 class Timer:
