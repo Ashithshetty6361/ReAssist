@@ -1,19 +1,26 @@
 """
-ReAssist — LangGraph Pipeline Builder
-Replaces imperative orchestration with a declarative state graph.
+ReAssist — LangGraph Declarative State Graph Pipeline Builder
+==============================================================
+File: src/pipeline/graph_builder.py
 
-Graph topology:
-  START -> search -> grade -> [grade_router]
-    grade_router -> summarize (if enough papers)
-    grade_router -> rewrite (if not enough)
-  rewrite -> [rewrite_router]
-    rewrite_router -> search (if attempts left — loop)
-    rewrite_router -> web_search (if exhausted)
-  web_search -> [web_search_router]
-    web_search_router -> summarize (if papers found)
-    web_search_router -> END (with error)
-  summarize -> synthesize -> gap_finder -> idea_generator
-    -> technique -> guidance -> verify -> END
+ARCHITECTURAL PURPOSE (EXPLAIN THIS IN INTERVIEWS):
+  This is the CENTRAL NERVOUS SYSTEM of ReAssist. It replaces traditional imperative
+  Python loops and linear LangChain chains with a compiled, cyclic LangGraph `StateGraph`.
+
+KEY ARCHITECTURAL HIGHLIGHTS TO EXPLAIN:
+  1. Cyclic State Graph (Why LangGraph?):
+     - Unlike standard DAGs (Directed Acyclic Graphs), Corrective RAG (CRAG) requires
+       a CYCLIC feedback loop: Search -> Grade -> Rewrite -> (Loops back to Search).
+  2. Fault Tolerance & Exponential Backoff (_run_with_retry):
+     - Wraps every node execution with automatic retry. Backs off exponentially on
+       `RateLimitError` (sleeping 2^attempt * 5 seconds: 5s, 10s) and 3s on network drops.
+  3. Enforced Context Slicing at Node Boundaries:
+     - Each node function extracts ONLY the keys required by its target agent from
+       `PipelineState` (e.g. `GapFinder` receives ONLY `synthesis`, NOT the raw papers).
+       This prevents quadratic token explosion ($O(N^2)$) down the execution chain.
+  4. Declarative Conditional Routing:
+     - Router functions (`grade_router`, `rewrite_router`, `web_search_router`) inspect
+       state counts and branch dynamically without hardcoded if/else spaghetti code.
 """
 
 import time
@@ -39,14 +46,16 @@ from src.core.llm_provider import get_default_model, get_grader_model
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Agent singletons (created once per build)
+# 1. AGENT SINGLETON CACHE (Pre-warmed to prevent instantiation overhead)
 # ═══════════════════════════════════════════════════════════════════════════════
-
 _agents = {}
 
 
 def _get_agents(model: str | None = None, max_papers: int = MAX_PAPERS):
-    """Lazy-init all 11 agents and cache them."""
+    """
+    Lazy-initializes all 11 specialized agent instances and caches them in memory.
+    Ensures that repetitive graph node executions reuse warm LLM client connections.
+    """
     model = model or get_default_model()
     grader_model = get_grader_model()
     key = (model, max_papers)
@@ -68,8 +77,19 @@ def _get_agents(model: str | None = None, max_papers: int = MAX_PAPERS):
     return _agents[key]
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. FAULT-TOLERANCE & RETRY HANDLER (Exponential Backoff on Rate Limits)
+# ═══════════════════════════════════════════════════════════════════════════════
 def _run_with_retry(agent, agent_name, input_data, max_retries=2):
-    """Run an agent with automatic retry on failure."""
+    """
+    Executes an agent with built-in resilience against upstream API drops and throttling.
+    
+    EXPLAIN IN VIVA/DEFENSE:
+      - Attempt 0: Direct execution.
+      - On RateLimitError: Sleeps (2^attempt * 5) seconds -> Attempt 0: 5s, Attempt 1: 10s.
+      - On ConnectionError: Sleeps 3s to allow socket recovery.
+      - If all 3 attempts fail, raises RuntimeError to let the orchestrator log the failure.
+    """
     last_error = None
     for attempt in range(max_retries + 1):
         try:
@@ -80,8 +100,10 @@ def _run_with_retry(agent, agent_name, input_data, max_retries=2):
             if attempt < max_retries:
                 import openai
                 if isinstance(e, openai.RateLimitError):
+                    # Exponential backoff on commercial cloud or local proxy rate limits
                     time.sleep((2 ** attempt) * 5)
                 elif isinstance(e, openai.APIConnectionError):
+                    # Transient network disconnect sleep
                     time.sleep(3)
                 else:
                     time.sleep(2)
@@ -337,11 +359,15 @@ def verify_node(state: PipelineState) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Conditional edge routers
+# 3. CONDITIONAL EDGE ROUTERS (The Corrective RAG Control Logic)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def grade_router(state: PipelineState) -> str:
-    """After grading: enough papers? -> summarize, not enough? -> rewrite."""
+    """
+    CRAG GATEWAY 1: Binary Relevance Check.
+    - If relevant papers >= RELEVANCE_THRESHOLD (3): Proceeds to summarization.
+    - If relevant papers < 3: Diverts to `rewrite_node` to reformulate the search query.
+    """
     relevant = len(state.get("papers", []))
     if relevant >= RELEVANCE_THRESHOLD:
         return "summarize_node"
@@ -349,35 +375,51 @@ def grade_router(state: PipelineState) -> str:
 
 
 def rewrite_router(state: PipelineState) -> str:
-    """After rewriting: attempts left? -> search again, exhausted? -> web_search."""
+    """
+    CRAG GATEWAY 2: Cyclic Loop vs Web Fallback.
+    - If rewrite_count < MAX_QUERY_REWRITES (2): Loops back to `search_node` (Cyclic Graph!).
+    - If rewrite attempts exhausted (>= 2): Escalates to Tavily `web_search_node`.
+    """
     if state.get("rewrite_count", 0) < MAX_QUERY_REWRITES:
         return "search_node"
     return "web_search_node"
 
 
 def web_search_router(state: PipelineState) -> str:
-    """After web search: found papers? -> summarize, nothing? -> END."""
+    """
+    CRAG GATEWAY 3: External Fallback Verification.
+    - If Tavily web search discovered literature: Advances to `summarize_node`.
+    - If nothing found: Gracefully terminates at END with an explanatory error.
+    """
     if state.get("papers"):
         return "summarize_node"
     return END
 
 
 def error_check(state: PipelineState) -> str:
-    """Check if an error occurred at any stage — short-circuit to END."""
+    """Short-circuit router: intercepts node errors and cleanly routes to END."""
     if state.get("error"):
         return END
     return "continue"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Graph builder
+# 4. STATE GRAPH COMPILATION (Declarative LangGraph Topology)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def build_pipeline_graph() -> StateGraph:
-    """Build and compile the full LangGraph pipeline."""
+    """
+    Builds and compiles the full LangGraph state machine.
+    
+    EXPLAIN IN VIVA/DEFENSE:
+      1. State Schema: Uses `PipelineState` as a strongly typed data contract.
+      2. Dynamic Entry Point: Senses `mode` ('pdf' -> rag_retriever vs 'query' -> search).
+      3. Native Cycles: Conditional edges enable retry loops that standard DAGs cannot do.
+      4. Linear Synthesis Pipeline: Chained with strict context slicing between agents.
+    """
     graph = StateGraph(PipelineState)
 
-    # Register all nodes
+    # 1. Register all 12 operational nodes
     graph.add_node("rag_retriever_node", rag_retriever_node)
     graph.add_node("search_node", search_node)
     graph.add_node("grade_node", grade_node)
@@ -391,7 +433,7 @@ def build_pipeline_graph() -> StateGraph:
     graph.add_node("guidance_node", guidance_node)
     graph.add_node("verify_node", verify_node)
 
-    # ─── Entry ───────────────────────────────────────────────────────────
+    # 2. Dynamic Entry Point: Branch on input mode
     graph.set_conditional_entry_point(
         lambda s: "rag_retriever_node" if s.get("mode") == "pdf" else "search_node",
         {
@@ -400,7 +442,7 @@ def build_pipeline_graph() -> StateGraph:
         }
     )
 
-    # ─── Search/RAG -> Grade -> [grade_router] ───────────────────────────
+    # 3. Discovery & Grading: Search/RAG -> Grade -> [grade_router]
     graph.add_edge("search_node", "grade_node")
     graph.add_edge("rag_retriever_node", "grade_node")
     graph.add_conditional_edges("grade_node", grade_router, {
@@ -408,19 +450,19 @@ def build_pipeline_graph() -> StateGraph:
         "rewrite_node": "rewrite_node",
     })
 
-    # ─── Rewrite -> [rewrite_router] ─────────────────────────────────────
+    # 4. CRAG Feedback Loop: Rewrite -> (Loops back to Search OR Fallback to Web)
     graph.add_conditional_edges("rewrite_node", rewrite_router, {
-        "search_node": "search_node",
-        "web_search_node": "web_search_node",
+        "search_node": "search_node",           # CYCLIC FEEDBACK LOOP
+        "web_search_node": "web_search_node",   # EXHAUSTED FALLBACK
     })
 
-    # ─── Web search -> [web_search_router] ───────────────────────────────
+    # 5. Fallback Resolution: Web Search -> [web_search_router]
     graph.add_conditional_edges("web_search_node", web_search_router, {
         "summarize_node": "summarize_node",
         END: END,
     })
 
-    # ─── Linear pipeline: summarize -> ... -> verify -> END ──────────────
+    # 6. Linear Intelligence Chain with Context Slicing
     graph.add_edge("summarize_node", "synthesize_node")
     graph.add_edge("synthesize_node", "gap_finder_node")
     graph.add_edge("gap_finder_node", "idea_generator_node")
@@ -432,5 +474,6 @@ def build_pipeline_graph() -> StateGraph:
     return graph.compile()
 
 
-# Pre-built graph singleton
+# Pre-built graph singleton (Compiled once at import time)
 pipeline_graph = build_pipeline_graph()
+

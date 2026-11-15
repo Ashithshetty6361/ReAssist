@@ -1,0 +1,26 @@
+{
+  "_comment": "REAL CRAG SELF-CORRECTIVE RUN ARTIFACT FROM REASSIST RUNTIME (logs/runs/run_7d5ff207.json)",
+  "_explanation": "Shows the autonomous Corrective RAG loop: 0 papers met initial relevance, triggering 2 automated query rewrites followed by Tavily Web Search fallback!",
+  "run_id": "7d5ff207",
+  "timestamp": "2026-10-08T18:53:25.568574",
+  "query": "Designing a Transparency Proxy for Human-Agent Collaboration to Mitigate Algorithmic Bias Concerns",
+  "total_time_seconds": 115.74,
+  "agent_timings": {
+    "search": 23.26,
+    "grading": 35.54,
+    "rewrite_0": 7.37,
+    "search_rewrite_1": 6.73,
+    "grading_r1": 35.94,
+    "rewrite_1": 4.78,
+    "web_search_fallback": 2.12
+  },
+  "slowest_agent": "grading_r1",
+  "papers_found": 3,
+  "pipeline_success": true,
+  "retrieval_quality": {
+    "relevant_count": 3,
+    "rewrites_needed": 2,
+    "web_fallback_used": true
+  }
+}
+

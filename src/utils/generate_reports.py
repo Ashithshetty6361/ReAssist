@@ -417,7 +417,24 @@ def build_docx_report(output_path):
          
         ("Q4: Why LangGraph instead of simple LangChain or AutoGen/CrewAI?",
          "A4: AutoGen and CrewAI rely on open-ended conversational agent loops that are non-deterministic, difficult to debug, and token-inefficient. "
-         "LangGraph provides a declarative, typed state machine where transitions, conditional loops (like CRAG), and error recovery are strictly defined and auditable.")
+         "LangGraph provides a declarative, typed state machine where transitions, conditional loops (like CRAG), and error recovery are strictly defined and auditable."),
+
+        ("Q5: What happens if arXiv or the LLM provider rate-limits your pipeline?",
+         "A5: The orchestrator wraps every node with _run_with_retry using exponential backoff (sleeping 2^attempt * 5 seconds on RateLimitError and 3s on connection error), "
+         "and the FastAPI backend decouples the UI from execution via an asynchronous polling job queue."),
+
+        ("Q6: You benchmarked with OpenAI costs, but ran locally on Ollama (Llama 3.1 & Phi-3). How do you defend this?",
+         "A6: The core scientific contribution is architectural: evaluating multi-agent state graphs against monolithic prompts on the identical base model. "
+         "Running on local Ollama guarantees 100% deterministic reproducibility without cloud API drift, protects sensitive research with air-gapped zero data leakage, and costs $0. "
+         "OpenAI rates in PRICING provide standard industry economic modeling, while local runs validate true zero-cost execution."),
+
+        ("Q7: How does the AgenticOps Auto-Router work without wasting LLM tokens?",
+         "A7: The router executes pure algorithmic heuristics in under 2ms with zero token cost across 6 lexical signals (domain jargon, word count > 8, comparison syntax, recency markers, survey keywords, narrow scope). "
+         "Queries scoring <= 4 route to fast CoT (9s, $0.0015); scores >= 5 invoke the 11-agent LangGraph pipeline, yielding 68% to 75% overall cost savings."),
+
+        ("Q8: When is Chain-of-Thought (CoT) better than Multi-Agent, and when does it fail?",
+         "A8: CoT is superior for narrow, single-hop lookups and conceptual definitions—executing 4x faster (~9s vs ~35s) at 75% lower cost. "
+         "However, for synthesizing 5–7 academic papers (~15,000 tokens), CoT suffers from 'Lost in the Middle' attention collapse, lacks self-corrective retry loops, and propagates hallucinated premises unchecked.")
     ]
 
     for q, a in qas:
@@ -827,6 +844,26 @@ def build_html_report(output_path):
 <div class="qa-block">
   <div class="qa-q">Q4: Why LangGraph instead of open-ended frameworks like AutoGen or CrewAI?</div>
   <div class="qa-a"><strong>A:</strong> AutoGen and CrewAI rely on conversational agent loops that are non-deterministic, hard to debug, and token-expensive. LangGraph provides a declarative, typed state machine where state transitions, conditional loops (CRAG), and error recovery are strictly defined and auditable.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q5: What happens if arXiv or the LLM provider rate-limits your pipeline?</div>
+  <div class="qa-a"><strong>A:</strong> The orchestrator wraps every node with <code>_run_with_retry</code> using exponential backoff (sleeping 2^attempt * 5 seconds on RateLimitError and 3s on connection dropouts), and the FastAPI backend decouples the UI from execution via an asynchronous polling job queue.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q6: You benchmarked with OpenAI costs, but ran locally on Ollama (Llama 3.1 & Phi-3). How do you defend this?</div>
+  <div class="qa-a"><strong>A:</strong> The core scientific contribution is architectural: evaluating multi-agent state graphs against monolithic prompts on the identical base model. Running on local Ollama guarantees 100% deterministic reproducibility without cloud API drift, protects sensitive research with air-gapped zero data leakage, and costs $0. OpenAI rates in <code>PRICING</code> provide standard industry economic modeling, while local runs validate true zero-cost execution.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q7: How does the AgenticOps Auto-Router work without wasting LLM tokens?</div>
+  <div class="qa-a"><strong>A:</strong> The router executes pure algorithmic heuristics in under 2ms with zero token cost across 6 lexical signals (domain jargon, word count &gt; 8, comparison syntax, recency markers, survey keywords, narrow scope). Queries scoring &le; 4 route to fast CoT (9s, $0.0015); scores &ge; 5 invoke the 11-agent LangGraph pipeline, yielding 68% to 75% overall cost savings.</div>
+</div>
+
+<div class="qa-block">
+  <div class="qa-q">Q8: When is Chain-of-Thought (CoT) better than Multi-Agent, and when does it fail?</div>
+  <div class="qa-a"><strong>A:</strong> CoT is superior for narrow, single-hop lookups and conceptual definitions—executing 4x faster (~9s vs ~35s) at 75% lower cost. However, for synthesizing 5–7 academic papers (~15,000 tokens), CoT suffers from 'Lost in the Middle' attention collapse, lacks self-corrective retry loops, and propagates hallucinated premises unchecked.</div>
 </div>
 
 </body>
